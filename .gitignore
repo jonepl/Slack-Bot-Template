@@ -1,0 +1,6 @@
+# Ignore Configuration Information
+config/creds.py
+
+# Ignore all cache files
+__pycache__
+.pytest_cache/

@@ -1,10 +1,12 @@
 from slackclient import SlackClient
-import config.creds
+import time;
 
-slack_client = SlackClient()
+import config.creds as config
+
+slack_client = SlackClient(config.slack['token'])
 
 def slackConnect():
-    return slack_client.rtm_connect(config.slack['token']);
+    return slack_client.rtm_connect();
 
 def another():
     api_call = slack_client.api_call("users.list")
@@ -13,5 +15,9 @@ def another():
         for user in users:
             print(user.get('name'));
 
-another();
+def readReadRTM():
+    print(slack_client.rtm_read());
+    time.sleep(1);
+
+
 # https://www.youtube.com/watch?v=QFPT37NoALA
