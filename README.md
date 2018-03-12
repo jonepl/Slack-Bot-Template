@@ -15,4 +15,4 @@ $ pip install slackclient
 ## Resources
 Slack Documentation: https://api.slack.com/
 Python Slack documentation: https://python-slackclient.readthedocs.io/en/1.0.2/
-Python Slack git repo: https://github.com/slackapi/python-slackclient```
+Python Slack git repo: https://github.com/slackapi/python-slackclient
