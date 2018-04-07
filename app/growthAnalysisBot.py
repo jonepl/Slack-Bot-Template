@@ -4,32 +4,48 @@ import time;
 
 class GrowthAnalysisBot(SlackBot) :
 
-    def __init__(self, token):
+    def __init__(self, token, debug=True):
+        self.users = {};
+        self.debug = debug;
+        self.running = False;
         super().__init__(token);
-        super().connect(self.token);
 
     def run(self) :
-        while(True) :
-            rawInput = super().readChannels();
-            print(rawInput);
-            # print("~~~~~~~~~~~~");
-            # self.parseRawInput(rawInput);
-            time.sleep(1);
+        self.running = True;
+        if(self.connect(self.token)) :
+            while(self.running) :
+                try:    
+                    rawInput = self.readChannels();
+                    print(rawInput)
+                    self.parseRawInput(rawInput);
+                    time.sleep(1);
+                except (KeyboardInterrupt, SystemError) :
+                    print("\n~~~~~~~~~~~KeyboardInterrupt Exception Found~~~~~~~~~~~\n");
+                    self.running = False;                
 
     # Overriden method
     def parseRawInput(self, rawInput):
         result = [];
-        if (not self.isEmpty(rawInput)) :
-            if(self.isMessage(rawInput)) :
-                result = self.parseMessage(rawInput);
-                self.determineAction(result);
-        # if(len(rawInput) > 0 and 'text' in rawInput[0]) :
-        #     rawInput = rawInput[0];
-        #     user = rawInput['user'];
-        #     message = rawInput['text'];
-        #     channel = rawInput['channel'];
-        #     result = [str(user), str(message), str(channel)]
-        #     print(result);
+        if (not self.isEmpty(rawInput) and self.isMessage(rawInput) and self.notSelf(rawInput)) :
+            result = self.parseMessage(rawInput);
+            self.determineAction(result);
+
+    def parseMessage(self, rawInput) :
+        rawInput = rawInput[0];
+        user = rawInput['user'];
+        message = rawInput['text'];
+        channel = rawInput['channel'];
+        return { 'user' : str(user), 'message' : str(message), 'channel' : str(channel) };
+
+    def determineAction(self, cleanedInput) :
+        self.writeToSlack(cleanedInput['channel'], cleanedInput['message']);
+
+    def reply(self, content) :
+        self.writeToSlack(content['channel'], content['message'])
+
+    def notSelf(self, rawInput) :
+        if(rawInput[0].get('user') == self.getBotID()) : return False;
+        else : return True; 
 
     def isTyping(self, rawInput) :
         if(rawInput[0].get('type') == 'user_typing') : return True;
@@ -43,15 +59,7 @@ class GrowthAnalysisBot(SlackBot) :
         if(rawInput[0].get('type') == 'message') : return True;
         else : return False;
 
-    def parseMessage(self, rawInput) :
-        rawInput = rawInput[0];
-        user = rawInput['user'];
-        message = rawInput['text'];
-        channel = rawInput['channel'];
-        return { 'user' : str(user), 'message' : str(message), 'channel' : str(channel) };
 
-    def determineAction(self, cleanedInput) :
-        self.writeToSlack(cleanedInput['channel'], cleanedInput['message']);
 
 if __name__ == '__main__':
     from slackBot import SlackBot;
