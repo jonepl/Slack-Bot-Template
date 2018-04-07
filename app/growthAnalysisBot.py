@@ -24,24 +24,50 @@ class GrowthAnalysisBot(SlackBot) :
                     self.running = False;                
 
     # Overriden method
-    def handle(self, rawInput):
+    # TODO: Need to handle up feature to send message
+    def parseRawInput(self, rawInput):
         result = [];
-        if (not self.isEmpty(rawInput) and self.isMessage(rawInput) and self.notSelf(rawInput)) :
-            result = self.parseMessage(rawInput);
-            self.determineAction(result);
+        if (not self.isEmpty(rawInput)) :
+            # Handles message
+            if(self.isMessage(rawInput) and self.notSelf(rawInput)) :
+                result = self.parseMessage(rawInput);
+                self.reply(result);
+            else :
+                print("Something other than a message");
+                print(rawInput);
 
     def parseMessage(self, rawInput) :
-        rawInput = rawInput[0];
-        user = rawInput['user'];
-        message = rawInput['text'];
-        channel = rawInput['channel'];
-        return { 'user' : str(user), 'message' : str(message), 'channel' : str(channel) };
 
+        parsedMessage = {};
+        user = rawInput[0]['user'];
+        message = rawInput[0]['text'];
+        channel = rawInput[0]['channel'];
+        directMessaged = None;
+
+        # Determine if bot is being direct messaged 
+        # Reference: #https://stackoverflow.com/questions/41111227/how-can-a-slack-bot-detect-a-direct-message-vs-a-message-in-a-channel
+        if (not self.getGroupInfo(channel).get('ok')) and (not self.getChannelInfo(channel).get('ok')) :
+            directMessaged = True 
+        else :
+            directMessaged = False
+
+        # Bot has been mentioned directly
+        if(self.getBotID() in rawInput[0]['text'] or directMessaged) :
+            parsedMessage = { 'user' : str(user), 'message' : str(self.stripTag(message)), 'channel' : str(channel) };
+            return parsedMessage;
+        else :
+            return {}
+
+    def stripTag(self, message) :
+        botTag = "<@" + self.getBotID() + ">"
+        return message.replace(botTag, '');
+        
     def determineAction(self, cleanedInput) :
         self.writeToSlack(cleanedInput['channel'], cleanedInput['message']);
 
     def reply(self, content) :
-        self.writeToSlack(content['channel'], content['message'])
+        if(content) : 
+            self.writeToSlack(content['channel'], content['message'])
 
     def notSelf(self, rawInput) :
         if(rawInput[0].get('user') == self.getBotID()) : return False;

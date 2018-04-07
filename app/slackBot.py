@@ -47,6 +47,14 @@ class SlackBot():
     def userIdToUserName(self):
         pass;
 
+    def getChannelInfo(self, channel) :
+        api_call = self.slack_client.api_call("channels.info", channel=channel)
+        return api_call;
+
+    def getGroupInfo(self, channel) :
+        api_call = self.slack_client.api_call("groups.info", channel=channel)
+        return api_call
+
     # TODO: Implement this
     def getBotInfo(self) :
         pass;
@@ -57,10 +65,9 @@ class SlackBot():
             self.botName = self.slack_client.server.login_data['self']['name'];
         return self.botName
 
-    # TODO Implement this for debugging
+    # TODO Use bot_id vs id
     def getBotID(self):
         if(self.botId is None) :
-            print("initializing BOTID");
             self.botId = self.slack_client.server.login_data['self']['id'];
         return self.botId
 
