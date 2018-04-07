@@ -24,7 +24,7 @@ class GrowthAnalysisBot(SlackBot) :
                     self.running = False;                
 
     # Overriden method
-    def parseRawInput(self, rawInput):
+    def handle(self, rawInput):
         result = [];
         if (not self.isEmpty(rawInput) and self.isMessage(rawInput) and self.notSelf(rawInput)) :
             result = self.parseMessage(rawInput);
@@ -58,8 +58,6 @@ class GrowthAnalysisBot(SlackBot) :
     def isMessage(self, rawInput) :
         if(rawInput[0].get('type') == 'message') : return True;
         else : return False;
-
-
 
 if __name__ == '__main__':
     from slackBot import SlackBot;
