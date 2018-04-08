@@ -47,10 +47,12 @@ class SlackBot():
     def userIdToUserName(self):
         pass;
 
+    # Retrieves channel information
     def getChannelInfo(self, channel) :
         api_call = self.slack_client.api_call("channels.info", channel=channel)
         return api_call;
 
+    # Retrieves group information
     def getGroupInfo(self, channel) :
         api_call = self.slack_client.api_call("groups.info", channel=channel)
         return api_call
@@ -59,19 +61,39 @@ class SlackBot():
     def getBotInfo(self) :
         pass;
 
-    # TODO Implement this for debugging
+    # Retrieves the name of the bot
     def getBotName(self) :
         if(self.botName is None) :
             self.botName = self.slack_client.server.login_data['self']['name'];
         return self.botName
 
-    # TODO Use bot_id vs id
+    # Retrieves the bot's ID
     def getBotID(self):
         if(self.botId is None) :
             self.botId = self.slack_client.server.login_data['self']['id'];
         return self.botId
 
+    def postFile(self, channel, filePath, filename) :
+        api_call = self.slack_client.api_call("files.upload", channel=channel, file=filePath, filename=filename);
+
 if __name__ == '__main__':
     pass;
 
-# https://www.youtube.com/watch?v=QFPT37NoALA
+'''
+For those who're still experiencing this,
+
+Instead of following,
+
+files = {'file': open('test.png', 'rb')}
+client.api_call('files.upload', channels=[...], filename='pic.png', files=files)
+
+Try this:
+
+client.api_call('files.upload', channels=[...], filename='pic.png', files=open('test.png', 'rb'))
+
+channels param requires a single string, not a list
+files param should be a file object, not a dict
+For example, I successfully uploaded a plain text file through:
+
+self.sc.api_call("files.upload", filename='result.txt', channels='#somechannel', file= io.BytesIO(str.encode(content)))
+'''

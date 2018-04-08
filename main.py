@@ -1,7 +1,7 @@
 import config.creds as config
 
 from app.slackBot import SlackBot
-from app.growthAnalysisBot import GrowthAnalysisBot
+from app.exampleBot import ExampleBot
 
-gaBot = GrowthAnalysisBot(config.slack['token'])
-gaBot.run();
+xBot = ExampleBot(config.slack['token'])
+xBot.run();
