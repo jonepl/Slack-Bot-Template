@@ -7,10 +7,10 @@
 $ pip install slackclient
 ```
 
-### 2. Retrive a Slack API token for you Slack app from:
+### 2. Retrive a Slack API token for your Slack app from:
   https://get.slack.help/hc/en-us/articles/215770388-Create-and-regenerate-API-tokens
   
-  NOTE:  Make sure to read the [Slack Documentation](https://api.slack.com/) and look through the available slack apps before developing your custom slack bot. There might be a Slack Apps that already does what you'd like to be done. 
+  NOTE:  Make sure to read the [Slack Documentation](https://api.slack.com/) and look through the available slack apps before developing your custom slack bot. There might be a Slack Apps that already does what you'd like to have done. 
 
 ### 3. Add token to config/creds.py
 
