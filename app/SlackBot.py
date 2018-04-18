@@ -64,6 +64,7 @@ class SlackBot():
     # Retrieves the name of the bot
     def getBotName(self) :
         if(self.botName is None) :
+            print(self.slack_client.server);
             self.botName = self.slack_client.server.login_data['self']['name'];
         return self.botName
 
@@ -73,7 +74,7 @@ class SlackBot():
             self.botId = self.slack_client.server.login_data['self']['id'];
         return self.botId
 
-    def postFile(self, channel, filePath, filename) :
+    def writeFile(self, channel, filePath, filename) :
         api_call = self.slack_client.api_call("files.upload", channel=channel, file=filePath, filename=filename);
 
 if __name__ == '__main__':

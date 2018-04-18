@@ -1,4 +1,4 @@
-from app.slackBot import SlackBot;
+from app.SlackBot import SlackBot;
 
 import time;
 
