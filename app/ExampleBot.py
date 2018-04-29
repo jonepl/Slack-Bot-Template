@@ -1,97 +1,76 @@
+'''
+File: ExampleBot.py
+Description: Implementation of a Slackbot Abstract Class. This class should have all bot specific functionality
+             for an instance of a Slackbot.
+'''
 from app.SlackBot import SlackBot;
+from app.MessageHandler import MessageHandler;
 
 import time;
+try :
+    import Queue
+except:
+    import queue as Queue
 
 class ExampleBot(SlackBot) :
 
     def __init__(self, token, debug=True):
+        super().__init__(token);
         self.users = {};
         self.debug = debug;
         self.running = False;
-        super().__init__(token);
+        self.responseQueue = Queue.Queue();
+        self.MessageHandler = None
 
+    # Entry method for Program
     def run(self) :
         self.running = True;
         if(self.connect(self.token)) :
+            self.MessageHandler = MessageHandler(self.responseQueue, self.getBotID());
             while(self.running) :
                 try:    
                     rawInput = self.readChannels();
-                    print(rawInput)
-                    self.parseRawInput(rawInput);
+                    print(rawInput);
+                    if (not self.isEmpty(rawInput)) :
+                        status = self.MessageHandler.handle(rawInput, self.directMessaged(rawInput));
+                        # DEBUG print("STATUS: " + str(status))
+                    self.checkResponseQueue();
                     time.sleep(1);
                 except (KeyboardInterrupt, SystemError) :
                     print("\n~~~~~~~~~~~KeyboardInterrupt Exception Found~~~~~~~~~~~\n");
                     self.running = False;                
 
-    # Overriden method
-    # TODO: Need to handle up feature to send message
-    def parseRawInput(self, rawInput):
-        result = [];
-        if (not self.isEmpty(rawInput)) :
-            # Handles message
-            if(self.isMessage(rawInput) and self.notSelf(rawInput)) :
-                result = self.parseMessage(rawInput);
-                self.reply(result);
+    # Check Queue to see if any messages are ready to be sent
+    def checkResponseQueue(self) :
+        if(not self.responseQueue.empty()) :
+            response = self.responseQueue.get();
+            # DEBUG print("~~~~~~~~~~~~~~~ CHECK QUEUE ~~~~~~~~~~~~~~~")
+            # DEBUG print(response)
+            self.handleResponse(response);
+
+    # Utilizes response object to response to user
+    def handleResponse(self, response) :
+        if(response['action'] == "writeToSlack") :
+            self.writeToSlack(response['channel'], response['response'])
+        elif(response['action'] == "writeToFile") :
+            pass;
+        else :
+            print("Error has occured");
+
+    # Determines if the bot is being DMed
+    def directMessaged(self, rawInput) :
+        if('channel' in rawInput[0]): 
+            if (not self.getGroupInfo(rawInput[0]['channel']).get('ok')) and (not self.getChannelInfo(rawInput[0]['channel']).get('ok')) :
+                return True;
             else :
-                print("Something other than a message");
-                print(rawInput);
-
-    # Parses the raw slack input
-    def parseMessage(self, rawInput) :
-
-        parsedMessage = {};
-        user = rawInput[0]['user'];
-        message = rawInput[0]['text'];
-        channel = rawInput[0]['channel'];
-        directMessaged = None;
-
-        # Determine if bot is being direct messaged 
-        # Reference: #https://stackoverflow.com/questions/41111227/how-can-a-slack-bot-detect-a-direct-message-vs-a-message-in-a-channel
-        if (not self.getGroupInfo(channel).get('ok')) and (not self.getChannelInfo(channel).get('ok')) :
-            directMessaged = True 
+                return False;
         else :
-            directMessaged = False
-
-        # Bot has been mentioned in a chat or direct messaged
-        if(self.getBotID() in rawInput[0]['text'] or directMessaged) :
-            parsedMessage = { 'user' : str(user), 'message' : str(self.stripTag(message)), 'channel' : str(channel) };
-            return parsedMessage;
-        else :
-            return {}
-
-    # Removes the Slack bot ID from a message
-    def stripTag(self, message) :
-        botTag = "<@" + self.getBotID() + ">"
-        return message.replace(botTag, '');
-
-    # TODO: Rewrite to handle multiple actions    
-    def determineAction(self, cleanedInput) :
-        self.writeToSlack(cleanedInput['channel'], cleanedInput['message']);
-
-    # Replays back to users
-    def reply(self, content) :
-        if(content) : 
-            self.writeToSlack(content['channel'], content['message'])
-
-    # Determines if the raw input was sent by this bot
-    def notSelf(self, rawInput) :
-        if(rawInput[0].get('user') == self.getBotID()) : return False;
-        else : return True; 
+            return False;
     
-    # Detect if a users is typing
-    def isTyping(self, rawInput) :
-        if(rawInput[0].get('type') == 'user_typing') : return True;
-        else : return False
-
     # Detects if raw input is Empty
     def isEmpty(self, rawInput) :
         if not rawInput : return True;
         else : return False
-
-    # Detects if the raw input is a message
-    def isMessage(self, rawInput) :
-        if(rawInput[0].get('type') == 'message') : return True;
-        else : return False;
 
 if __name__ == '__main__':
     from slackBot import SlackBot;
