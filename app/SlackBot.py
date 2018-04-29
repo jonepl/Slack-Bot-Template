@@ -8,13 +8,17 @@ from slackclient import SlackClient;
 import sys;
 from abc import ABCMeta, abstractmethod;
 import time;
+try :
+    import Queue
+except:
+    import queue as Queue
 
 class SlackBot():
     def __init__(self, token=None):
         if(token is None) :
             print("A valid token must be past as a parameter");
             sys.exit(-1);
-        self.responseQueue = [];
+        self.responseQueue = None;
         self.token = token;
         self.botId = None
         self.botName = None;
@@ -70,7 +74,6 @@ class SlackBot():
     # Retrieves the name of the bot
     def getBotName(self) :
         if(self.botName is None) :
-            print(self.slack_client.server);
             self.botName = self.slack_client.server.login_data['self']['name'];
         return self.botName
 

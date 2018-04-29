@@ -12,54 +12,51 @@ except:
 SUCCESS = 0;
 FAILURE = -1;
 GREETING_KEYWORDS = ["hey", "hi", "greetings", "sup", "hello"]
-COMMAND_WORDS = ["give", "file"]
-GREETING_RESPONSES = ["Sup bro", "Hey", "*nods*", "What up homie?"]
+SERVICE_KEYWORDS = ["give", "file"]
+GREETING_RESPONSES = ["Sup bro.", "Hey.", "What it do!", "What up homie?", "Howdy."]
 
 class MessageHandler(object):
     
-    def __init__(self, responseQueue, botID, directMessaged) :
+    def __init__(self, responseQueue, botID) :
         self.botID = botID;
-        self.directMessaged = directMessaged;
         self.responseQueue = responseQueue;
 
-    def run(self, rawInput) :
-        return self.handle(rawInput);
+    # NOTE: Will be used for threading
+    def run(self, rawInput, directMessaged) :
+        return self.handle(rawInput, directMessaged);
         
     # Parses all raw input
     ### Assumptions: All rawInput sent to this message should be of type Array and not empty
-    def handle(self, rawInput):
+    def handle(self, rawInput, directMessaged):
         response = None
         if (not self.isEmpty(rawInput)) :
-            # Handles message
-            if(self.isAMessage(rawInput) and self.notSelf(rawInput)) :
-                response = self.parse(rawInput);
+            # Verify if rawInput is valid 
+            if(self.isAMessage(rawInput) and self.notSelf(rawInput) and (self.botMentioned(rawInput) or directMessaged)) :
+                response = self.parseInput(rawInput, directMessaged);
+                # DEBUG print("~~~~~~~~~~~~~~~~ RESPONSE ~~~~~~~~~~~~~~")
+                # DEBUG print(response)
                 self.responseQueue.put(response);
                 return SUCCESS;
             else :
                 return FAILURE;
     
     # Parses the raw slack input into parts
-    def parse(self, rawInput) :
+    def parseInput(self, rawInput, directMessaged) :
 
         responseObject = {};
         user = rawInput[0]['user'];
         message = rawInput[0]['text'];
         channel = rawInput[0]['channel'];
 
-        # Bot has been mentioned in a chat or direct messaged
-        if(self.botMentioned or self.directMessaged) :
-            
-            action, response = self.determineAction(message, responseObject);
-            
-            responseObject['action'] = action;
-            responseObject['response'] = response
-            responseObject["user"] = str(user);
-            responseObject['message'] = str(self.stripTag(message));
-            responseObject['channel'] = str(channel);
-            
-            return responseObject;
-        else :
-            return responseObject;
+        action, response = self.determineAction(message, responseObject);
+        
+        responseObject['action'] = action;
+        responseObject['response'] = response
+        responseObject["user"] = str(user);
+        responseObject['message'] = str(self.stripTag(message));
+        responseObject['channel'] = str(channel);
+        
+        return responseObject;
 
     # Determine what action to take depending on the message
     def determineAction(self, message, responseObject) :
@@ -69,18 +66,17 @@ class MessageHandler(object):
             # TODO: Improve to handle all types of services
             return ("writeToFile", "Writing this junk to a file");
         else :
-            return ("writeToFile", "Im not sure how to decipher \"" + message + "\".")
+            return ("writeToSlack", "Im not sure how to decipher \"" + self.stripTag(message) + "\".")
 
     # Determines if a message contains a greeting word
     def isGreeting(self, message) :
         for greeting in GREETING_KEYWORDS :
             if(greeting in message.lower()) :
-                print(greeting + " " + message)
                 return True;
         return False;
 
     def isServiceRequest(self, message) :
-        for command in COMMAND_WORDS :
+        for command in SERVICE_KEYWORDS :
             if(command in message.lower()) :
                 return True;
         return False;
@@ -156,9 +152,9 @@ class MessageHandler(object):
 if __name__ == '__main__' :
     rq = Queue.Queue(3);
     print(rq.qsize());
-    mh = MessageHandler(rq,"R2D2", True);
+    mh = MessageHandler(rq,"R2D2");
     text = input("Enter message for message Handler Class:\n> ")
-    mh.handle([{'text': text, 'user': 'U9H1FCNG4', 'team': 'T9GMMDTPG', 'channel': 'D9GCAPGNL', 'bot_id': 'B9H5NKUHK', 'ts': '1524798523.000234', 'type': 'message', 'event_ts': '1524798523.000234'}]);
+    mh.handle([{'text': text, 'user': 'U9H1FCNG4', 'team': 'T9GMMDTPG', 'channel': 'D9GCAPGNL', 'bot_id': 'B9H5NKUHK', 'ts': '1524798523.000234', 'type': 'message', 'event_ts': '1524798523.000234'}], True);
     print(rq.qsize());
     print(rq.get());
 
