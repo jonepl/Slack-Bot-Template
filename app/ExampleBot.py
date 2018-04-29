@@ -1,3 +1,8 @@
+'''
+File: ExampleBot.py
+Description: Implementation of a Slackbot Abstract Class. This class should have all bot specific functionality
+             for an instance of a Slackbot.
+'''
 from app.SlackBot import SlackBot;
 
 import time;

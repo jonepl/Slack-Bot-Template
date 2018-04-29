@@ -1,3 +1,7 @@
+'''
+File: MessageHandler.py
+Description: Handles raw input and determines an appropriate response to send back to the user
+'''
 import random
 try :
     import Queue
@@ -5,8 +9,10 @@ except:
     import queue as Queue
 
 # Sentences we'll respond with if the user greeted us
-GREETING_KEYWORDS = ("hello", "hi", "greetings", "sup", "what's up",)
-
+SUCCESS = 0;
+FAILURE = -1;
+GREETING_KEYWORDS = ["hey", "hi", "greetings", "sup", "hello"]
+COMMAND_WORDS = ["give", "file"]
 GREETING_RESPONSES = ["Sup bro", "Hey", "*nods*", "What up homie?"]
 
 class MessageHandler(object):
@@ -16,48 +22,68 @@ class MessageHandler(object):
         self.directMessaged = directMessaged;
         self.responseQueue = responseQueue;
 
-    def start(self, rawInput) :
-        result = self.parse(rawInput);
-        return result;
-
+    def run(self, rawInput) :
+        return self.handle(rawInput);
+        
     # Parses all raw input
     ### Assumptions: All rawInput sent to this message should be of type Array and not empty
-    def parse(self, rawInput):
+    def handle(self, rawInput):
         response = None
         if (not self.isEmpty(rawInput)) :
             # Handles message
-            if(self.isMessage(rawInput) and self.notSelf(rawInput)) :
-                response = self.parseMessage(rawInput);
+            if(self.isAMessage(rawInput) and self.notSelf(rawInput)) :
+                response = self.parse(rawInput);
                 self.responseQueue.put(response);
-                return response;
+                return SUCCESS;
             else :
-                print("Something went wrong");
-                print(rawInput);
-                return response;
+                return FAILURE;
     
-    # Parses the raw slack input
-    def parseMessage(self, rawInput) :
+    # Parses the raw slack input into parts
+    def parse(self, rawInput) :
 
         responseObject = {};
         user = rawInput[0]['user'];
         message = rawInput[0]['text'];
         channel = rawInput[0]['channel'];
 
-        self.determineAction(message, responseObject);
-
         # Bot has been mentioned in a chat or direct messaged
         if(self.botMentioned or self.directMessaged) :
+            
+            action, response = self.determineAction(message, responseObject);
+            
+            responseObject['action'] = action;
+            responseObject['response'] = response
             responseObject["user"] = str(user);
             responseObject['message'] = str(self.stripTag(message));
             responseObject['channel'] = str(channel);
+            
             return responseObject;
         else :
-            return {}
+            return responseObject;
 
     # Determine what action to take depending on the message
     def determineAction(self, message, responseObject) :
-        if('Hey' in message) :
-            responseObject['action'] = "writeToSlack";
+        if(self.isGreeting(message)) :
+            return ("writeToSlack",random.choice(GREETING_RESPONSES));
+        elif(self.isServiceRequest(message)) :
+            # TODO: Improve to handle all types of services
+            return ("writeToFile", "Writing this junk to a file");
+        else :
+            return ("writeToFile", "Im not sure how to decipher \"" + message + "\".")
+
+    # Determines if a message contains a greeting word
+    def isGreeting(self, message) :
+        for greeting in GREETING_KEYWORDS :
+            if(greeting in message.lower()) :
+                print(greeting + " " + message)
+                return True;
+        return False;
+
+    def isServiceRequest(self, message) :
+        for command in COMMAND_WORDS :
+            if(command in message.lower()) :
+                return True;
+        return False;
 
     # Determines if the bot is mentioned in the raw input
     def botMentioned(self, rawInput) :
@@ -85,20 +111,13 @@ class MessageHandler(object):
         else : return False
 
     # Detects if the raw input is a message
-    def isMessage(self, rawInput) :
+    def isAMessage(self, rawInput) :
         if(rawInput[0].get('type') == 'message') : return True;
         else : return False;
     
-    # def respond(self, userInput) :
 
-    #     for word in userInput.split():
-    #         if word.lower() in GREETING_KEYWORDS:
-    #             return random.choice(GREETING_RESPONSES)
-
-    #         if word.lower() in FILE_WORDS :
-    #             pass;
-
-    # def filter_response(self, response):
+    '''Example Message Handling using Textblob'''
+    #  def filter_response(self, response):
     #     """Don't allow any words to match our filter list"""
     #     tokenized = response.split(' ')
     #     for word in tokenized:
@@ -108,43 +127,38 @@ class MessageHandler(object):
     #             if word.lower().startswith(s):
     #                 raise UnacceptableUtteranceException()   
 
-        # cleaned = preprocess_text(sentence)
-        # parsed = TextBlob(cleaned)
+    #     cleaned = preprocess_text(sentence)
+    #     parsed = TextBlob(cleaned)
 
-        # pronoun, noun, adjective, verb = find_candidate_parts_of_speech(parsed)
+    #     pronoun, noun, adjective, verb = find_candidate_parts_of_speech(parsed)
 
-        # resp = check_for_comment_about_bot(pronoun, noun, adjective)
+    #     resp = check_for_comment_about_bot(pronoun, noun, adjective)
         
-        # if not resp:
-            # resp = check_for_greeting(parsed)
+    #     if not resp:
+    #         resp = check_for_greeting(parsed)
 
-        # if not resp :
-            # resp = random.choice(NONE_RESPONSES)
-        # elif pronoun == 'I' and not verb :
-            # resp = random.choice(COMMENTS_ABOUT_SELF)
-        # else:
-            # resp = construct_response(pronoun, noun, verb)
+    #     if not resp :
+    #         resp = random.choice(NONE_RESPONSES)
+    #     elif pronoun == 'I' and not verb :
+    #         resp = random.choice(COMMENTS_ABOUT_SELF)
+    #     else:
+    #         resp = construct_response(pronoun, noun, verb)
         
-        # if not resp:
-            # resp = random.choice(NONE_RESPONSES)
+    #     if not resp:
+    #         resp = random.choice(NONE_RESPONSES)
 
-        # logger.info("Returning phrase '%s'", resp)
+    #     logger.info("Returning phrase '%s'", resp)
 
-        # filter_response(resp)
+    #     filter_response(resp)
 
-        # return resp
-
-    
-
-
-    
+    #     return resp
 
 if __name__ == '__main__' :
     rq = Queue.Queue(3);
     print(rq.qsize());
     mh = MessageHandler(rq,"R2D2", True);
-    response = mh.parse([{'text': 'Hey welcome-bot', 'user': 'U9H1FCNG4', 'team': 'T9GMMDTPG', 'channel': 'D9GCAPGNL', 'bot_id': 'B9H5NKUHK', 'ts': '1524798523.000234', 'type': 'message', 'event_ts': '1524798523.000234'}]);
-    print(rq.get());
+    text = input("Enter message for message Handler Class:\n> ")
+    mh.handle([{'text': text, 'user': 'U9H1FCNG4', 'team': 'T9GMMDTPG', 'channel': 'D9GCAPGNL', 'bot_id': 'B9H5NKUHK', 'ts': '1524798523.000234', 'type': 'message', 'event_ts': '1524798523.000234'}]);
     print(rq.qsize());
-    print(response);
+    print(rq.get());
 

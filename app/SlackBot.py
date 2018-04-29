@@ -1,3 +1,8 @@
+'''
+File: SlackBot.py
+Description: Abstraction of a Slackbot implementation. This class should have all general functionality
+             for an instance of a Slackbot.
+'''
 from slackclient import SlackClient;
 
 import sys;
@@ -9,6 +14,7 @@ class SlackBot():
         if(token is None) :
             print("A valid token must be past as a parameter");
             sys.exit(-1);
+        self.responseQueue = [];
         self.token = token;
         self.botId = None
         self.botName = None;
