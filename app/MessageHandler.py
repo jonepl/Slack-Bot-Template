@@ -3,6 +3,7 @@ File: MessageHandler.py
 Description: Handles raw input and determines an appropriate response to send back to the user
 '''
 import random
+from threading import Thread
 try :
     import Queue
 except:
@@ -15,38 +16,43 @@ GREETING_KEYWORDS = ["hey", "hi", "greetings", "sup", "hello"]
 SERVICE_KEYWORDS = ["give", "file"]
 GREETING_RESPONSES = ["Sup bro.", "Hey.", "What it do!", "What up homie?", "Howdy."]
 
-class MessageHandler(object):
+class MessageHandler(Thread):
     
-    def __init__(self, responseQueue, botID) :
-        self.botID = botID;
+    def __init__(self, responseQueue, rawInput, directMessaged, botID) :
+        Thread.__init__(self)
         self.responseQueue = responseQueue;
+        self.rawInput = rawInput;
+        self.directMessaged = directMessaged;
+        self.botID = botID;
 
     # NOTE: Will be used for threading
-    def run(self, rawInput, directMessaged) :
-        return self.handle(rawInput, directMessaged);
+    def run(self) :
+        return self.handle();
         
     # Parses all raw input
     ### Assumptions: All rawInput sent to this message should be of type Array and not empty
-    def handle(self, rawInput, directMessaged):
+    def handle(self):
         response = None
-        if (not self.isEmpty(rawInput)) :
+        if (not self.isEmpty()) :
             # Verify if rawInput is valid 
-            if(self.isAMessage(rawInput) and self.notSelf(rawInput) and (self.botMentioned(rawInput) or directMessaged)) :
-                response = self.parseInput(rawInput, directMessaged);
+            if(self.isAMessage() and self.notSelf() and (self.botMentioned() or self.directMessaged)) :
+                response = self.parseInput();
                 # DEBUG print("~~~~~~~~~~~~~~~~ RESPONSE ~~~~~~~~~~~~~~")
                 # DEBUG print(response)
                 self.responseQueue.put(response);
+                print("Completed SUCCESS");
                 return SUCCESS;
             else :
+                print("Completed FAILURE");
                 return FAILURE;
     
     # Parses the raw slack input into parts
-    def parseInput(self, rawInput, directMessaged) :
+    def parseInput(self) :
 
         responseObject = {};
-        user = rawInput[0]['user'];
-        message = rawInput[0]['text'];
-        channel = rawInput[0]['channel'];
+        user = self.rawInput[0]['user'];
+        message = self.rawInput[0]['text'];
+        channel = self.rawInput[0]['channel'];
 
         action, response = self.determineAction(message, responseObject);
         
@@ -82,8 +88,8 @@ class MessageHandler(object):
         return False;
 
     # Determines if the bot is mentioned in the raw input
-    def botMentioned(self, rawInput) :
-        if(self.botID in rawInput[0]['text']) : return True;
+    def botMentioned(self) :
+        if(self.botID in self.rawInput[0]['text']) : return True;
         else : return False;
 
     # Removes the Slack bot ID from a message
@@ -92,23 +98,23 @@ class MessageHandler(object):
         return message.replace(botTag, '');
 
     # Determines if the raw input was sent by this bot
-    def notSelf(self, rawInput) :
-        if(rawInput[0].get('user') == self.botID) : return False;
+    def notSelf(self) :
+        if(self.rawInput[0].get('user') == self.botID) : return False;
         else : return True; 
     
     # Detect if a users is typing
-    def isTyping(self, rawInput) :
-        if(rawInput[0].get('type') == 'user_typing') : return True;
+    def isTyping(self) :
+        if(self.rawInput[0].get('type') == 'user_typing') : return True;
         else : return False
 
     # Detects if raw input is Empty
-    def isEmpty(self, rawInput) :
-        if not rawInput : return True;
+    def isEmpty(self) :
+        if not self.rawInput : return True;
         else : return False
 
     # Detects if the raw input is a message
-    def isAMessage(self, rawInput) :
-        if(rawInput[0].get('type') == 'message') : return True;
+    def isAMessage(self) :
+        if(self.rawInput[0].get('type') == 'message') : return True;
         else : return False;
     
 
@@ -152,9 +158,9 @@ class MessageHandler(object):
 if __name__ == '__main__' :
     rq = Queue.Queue(3);
     print(rq.qsize());
-    mh = MessageHandler(rq,"R2D2");
+    rInput = [{'text': text, 'user': 'U9H1FCNG4', 'team': 'T9GMMDTPG', 'channel': 'D9GCAPGNL', 'bot_id': 'B9H5NKUHK', 'ts': '1524798523.000234', 'type': 'message', 'event_ts': '1524798523.000234'}]
+    mh = MessageHandler(rq, rInput, True, "R2D2");
     text = input("Enter message for message Handler Class:\n> ")
-    mh.handle([{'text': text, 'user': 'U9H1FCNG4', 'team': 'T9GMMDTPG', 'channel': 'D9GCAPGNL', 'bot_id': 'B9H5NKUHK', 'ts': '1524798523.000234', 'type': 'message', 'event_ts': '1524798523.000234'}], True);
     print(rq.qsize());
     print(rq.get());
 

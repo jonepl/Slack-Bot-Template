@@ -26,13 +26,22 @@ class ExampleBot(SlackBot) :
     def run(self) :
         self.running = True;
         if(self.connect(self.token)) :
-            self.MessageHandler = MessageHandler(self.responseQueue, self.getBotID());
+            counter = 0
             while(self.running) :
                 try:    
                     rawInput = self.readChannels();
                     print(rawInput);
                     if (not self.isEmpty(rawInput)) :
-                        status = self.MessageHandler.handle(rawInput, self.directMessaged(rawInput));
+                        
+                        # if max thread not exceed.
+                        mhandler = MessageHandler(self.responseQueue, rawInput, self.directMessaged(rawInput),  self.getBotID());
+                        mhandler.setName('Thread ' + str(counter))
+                        mhandler.daemon = True
+                        counter = counter + 1;
+                        print("Deploying: " + mhandler.getName())
+                        mhandler.start();
+                        print(mhandler.active_count())
+                        
                         # DEBUG print("STATUS: " + str(status))
                     self.checkResponseQueue();
                     time.sleep(1);
@@ -44,6 +53,7 @@ class ExampleBot(SlackBot) :
     def checkResponseQueue(self) :
         if(not self.responseQueue.empty()) :
             response = self.responseQueue.get();
+            self.responseQueue.task_done()
             # DEBUG print("~~~~~~~~~~~~~~~ CHECK QUEUE ~~~~~~~~~~~~~~~")
             # DEBUG print(response)
             self.handleResponse(response);
