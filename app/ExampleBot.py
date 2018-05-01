@@ -39,7 +39,7 @@ class ExampleBot(SlackBot) :
                         self.requestQueue.put(rawInput);
 
                     self.checkResponseQueue();
-                    time.sleep(1);
+                    time.sleep(0.5);
                 except (KeyboardInterrupt, SystemError) :
                     print("\n~~~~~~~~~~~KeyboardInterrupt Exception Found~~~~~~~~~~~\n");
                     self.MessageHandler.kill();
