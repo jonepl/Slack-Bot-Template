@@ -18,6 +18,7 @@ class SlackBot():
         if(token is None) :
             print("A valid token must be past as a parameter");
             sys.exit(-1);
+        self.requestQueue = None;
         self.responseQueue = None;
         self.token = token;
         self.botId = None
