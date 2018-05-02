@@ -1,4 +1,21 @@
-# Slack Bot Template
+<h1 align="center">
+  <br>
+  <a href="#"><img src="https://www.spaceotechnologies.com/wp-content/themes/spaceotechnologies/images/services/slack-development/slackdroid.png" alt="Markdownify" width="200"></a>
+  <br>
+  Slack Bot Template
+  <br>
+</h1>
+
+<h4 align="center">A quick easy to use Slack bot template.</h4>
+
+<p align="center">
+  <a href="#">
+    <img src="https://img.shields.io/badge/Python-v3.6-blue.svg" alt="Gitter">
+  </a>
+  <a href="#">
+    <img src="https://img.shields.io/badge/contributions-welcome-orange.svg">
+  </a>
+</p>
 
 ## Setup:
 
@@ -7,9 +24,13 @@
 $ pip install slackclient
 ```
 
-### 2. Retrive a Slack API token for your Slack app from:
-  https://get.slack.help/hc/en-us/articles/215770388-Create-and-regenerate-API-tokens
-  
+### 2. Retrive a Slack API token:
+Head to this link to get your Slack API token set up for your application : 
+
+```sh
+https://get.slack.help/hc/en-us/articles/215770388-Create-and-regenerate-API-tokens
+```
+
   NOTE:  Make sure to read the [Slack Documentation](https://api.slack.com/) and look through the available slack apps before developing your custom slack bot. There might be a Slack Apps that already does what you'd like to have done. 
 
 ### 3. Add token to config/creds.py
