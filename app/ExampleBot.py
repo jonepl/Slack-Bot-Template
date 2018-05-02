@@ -20,30 +20,42 @@ class ExampleBot(SlackBot) :
         self.debug = debug;
         self.running = False;
         self.responseQueue = Queue.Queue();
-        self.MessageHandler = None
+        self.requestQueue = Queue.Queue();
+        self.MessageHandler = None;
 
     # Entry method for Program
     def run(self) :
         self.running = True;
         if(self.connect(self.token)) :
-            self.MessageHandler = MessageHandler(self.responseQueue, self.getBotID());
+            # Starts thread and passes BotID
+            self.setUpThreads();
+
             while(self.running) :
                 try:    
                     rawInput = self.readChannels();
                     print(rawInput);
-                    if (not self.isEmpty(rawInput)) :
-                        status = self.MessageHandler.handle(rawInput, self.directMessaged(rawInput));
-                        # DEBUG print("STATUS: " + str(status))
+                    # DEBUG print("Request Queue: " + str(self.requestQueue.qsize()))
+                    if (not self.isEmpty(rawInput) and self.notSelf(rawInput) and (self.botMentioned(rawInput) or self.directMessaged(rawInput)) ) :
+                        self.requestQueue.put(rawInput);
+
                     self.checkResponseQueue();
-                    time.sleep(1);
+                    time.sleep(0.5);
                 except (KeyboardInterrupt, SystemError) :
                     print("\n~~~~~~~~~~~KeyboardInterrupt Exception Found~~~~~~~~~~~\n");
+                    self.MessageHandler.kill();
                     self.running = False;                
+
+    def setUpThreads(self) :
+        self.MessageHandler = MessageHandler(self.requestQueue, self.responseQueue, self.getBotID());
+        self.MessageHandler.setName("Thread 1");
+        self.MessageHandler.daemon = True;
+        self.MessageHandler.start();
 
     # Check Queue to see if any messages are ready to be sent
     def checkResponseQueue(self) :
         if(not self.responseQueue.empty()) :
             response = self.responseQueue.get();
+            self.responseQueue.task_done()
             # DEBUG print("~~~~~~~~~~~~~~~ CHECK QUEUE ~~~~~~~~~~~~~~~")
             # DEBUG print(response)
             self.handleResponse(response);
@@ -67,11 +79,22 @@ class ExampleBot(SlackBot) :
         else :
             return False;
     
+    # Determines if the bot is mentioned in the raw input
+    def botMentioned(self, rawInput) :
+        if('text' in rawInput[0]) :
+            if(self.getBotID() in rawInput[0]['text']) : return True;
+        else : return False;
+
     # Detects if raw input is Empty
     def isEmpty(self, rawInput) :
         if not rawInput : return True;
         else : return False
 
+    # Determines if the raw input was sent by this bot
+    def notSelf(self, rawInput) :
+        if(rawInput[0].get('user') == self.getBotID()) : return False;
+        else : return True;
+
 if __name__ == '__main__':
     from slackBot import SlackBot;
-    xBot = ExampleBot("");
+    xBot = ExampleBot("place_token_here");
