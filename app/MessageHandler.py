@@ -49,6 +49,7 @@ class MessageHandler(Thread):
                 # DEBUG print("Completed FAILURE");
                 return FAILURE;
     
+    # Kills Thread run method
     def kill(self) :
         self.running = False;
 
