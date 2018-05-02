@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="#">
-    <img src="https://img.shields.io/badge/Python-v3.6-blue.svg" alt="Gitter">
+    <img src="https://img.shields.io/badge/Python-v3.5-blue.svg" alt="Gitter">
   </a>
   <a href="#">
     <img src="https://img.shields.io/badge/contributions-welcome-orange.svg">
