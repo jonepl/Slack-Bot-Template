@@ -65,7 +65,7 @@ class ExampleBot(SlackBot) :
         if(response['action'] == "writeToSlack") :
             self.writeToSlack(response['channel'], response['response'])
         elif(response['action'] == "writeToFile") :
-            pass;
+            self.writeToFile(response['channel']);
         else :
             print("Error has occured");
 

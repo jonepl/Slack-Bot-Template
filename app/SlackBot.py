@@ -8,6 +8,8 @@ from slackclient import SlackClient;
 import sys;
 from abc import ABCMeta, abstractmethod;
 import time;
+import io;
+
 try :
     import Queue
 except:
@@ -84,8 +86,10 @@ class SlackBot():
             self.botId = self.slack_client.server.login_data['self']['id'];
         return self.botId
 
-    def writeFile(self, channel, filePath, filename) :
-        api_call = self.slack_client.api_call("files.upload", channel=channel, file=filePath, filename=filename);
+    def writeToFile(self, channel, filePath="./app/extra/textFile.txt", filename="textFile.txt") :
+        # FIXME: Add try catch in case of file 
+        daFile =  open(filePath, 'r')
+        return self.slack_client.api_call("files.upload", channels=channel, file=daFile); 
 
 if __name__ == '__main__':
     pass;
