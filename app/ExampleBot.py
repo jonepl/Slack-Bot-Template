@@ -63,9 +63,11 @@ class ExampleBot(SlackBot) :
     # Utilizes response object to response to user
     def handleResponse(self, response) :
         if(response['action'] == "writeToSlack") :
-            self.writeToSlack(response['channel'], response['response'])
+            # TODO: Handle unsuccess result and log failures
+            result = self.writeToSlack(response['channel'], response['response'])
         elif(response['action'] == "writeToFile") :
-            self.writeToFile(response['channel']);
+            # TODO: Handle unsuccess result and log failures
+            result = self.writeToFile(response['channel']);
         else :
             print("Error has occured");
 

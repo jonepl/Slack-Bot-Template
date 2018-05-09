@@ -9,4 +9,4 @@ __pycache__
 Notes.txt
 
 # Ignore extra files for testing
-/app/extra/
+/extras/files/textFile.txt
