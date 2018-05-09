@@ -86,7 +86,7 @@ class SlackBot():
             self.botId = self.slack_client.server.login_data['self']['id'];
         return self.botId
 
-    def writeToFile(self, channel, filePath="./extras/images/Financial_SlackBot.png") :
+    def writeToFile(self, channel, filePath) :
         # FIXME: Add try catch in case of file 
         daFile =  open(filePath, 'rb')
         return self.slack_client.api_call("files.upload", channels=channel, file=daFile); 

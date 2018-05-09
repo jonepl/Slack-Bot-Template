@@ -67,7 +67,7 @@ class ExampleBot(SlackBot) :
             result = self.writeToSlack(response['channel'], response['response'])
         elif(response['action'] == "writeToFile") :
             # TODO: Handle unsuccess result and log failures
-            result = self.writeToFile(response['channel']);
+            result = self.writeToFile(response['channel'], response['response']);
         else :
             print("Error has occured");
 

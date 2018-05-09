@@ -77,7 +77,7 @@ class MessageHandler(Thread):
             return ("writeToSlack",random.choice(GREETING_RESPONSES));
         elif(self.isServiceRequest(message)) :
             # TODO: Improve to handle all types of services
-            return ("writeToFile", "Writing this junk to a file");
+            return ("writeToFile", "./extras/images/slackdroid.png");
         else :
             return ("writeToSlack", "Im not sure how to decipher \"" + self.stripTag(message) + "\".")
 
