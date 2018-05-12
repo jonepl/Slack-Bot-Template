@@ -1,8 +1,21 @@
 import config.creds as config
+import argparse
+import os
 
 from app.SlackBot import SlackBot
 from app.ExampleBot import ExampleBot
-#from app.ResponseHandler import ResponseHandler
 
-xBot = ExampleBot(config.slack['token'])
-xBot.run();
+def main():
+
+    args = prepCmdArgs();
+    xBot = ExampleBot(config.slack['token'], args.debug)
+    xBot.run()
+
+def prepCmdArgs() :
+    
+    parser = argparse.ArgumentParser(description='Kicks off an instance of of a Slackbot')
+    parser.add_argument('-d', '--debug', action='store_true')
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    main()
