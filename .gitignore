@@ -12,4 +12,4 @@ Notes.txt
 /extras/files/textFile.txt
 
 # Ignore log files
-#**/*.log
+**/*.log
