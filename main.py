@@ -1,6 +1,8 @@
+import os
 import config.creds as config
 import argparse
-import os
+
+if not os.path.exists("./logs"): os.makedirs("./logs")
 
 from app.SlackBot import SlackBot
 from app.ExampleBot import ExampleBot
