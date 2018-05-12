@@ -23,7 +23,9 @@ class MessageHandler(Thread):
         self.running = True;
         self.requestQueue = requestQueue;
         self.responseQueue = responseQueue;
+        self.servicesQueue = Queue.Queue();
         self.botID = botID
+        #self.ServiceManager = ServiceManager(self.servicesQueue);
 
     # NOTE: Will be used for threading
     def run(self) :

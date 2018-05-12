@@ -10,3 +10,6 @@ Notes.txt
 
 # Ignore extra files for testing
 /extras/files/textFile.txt
+
+# Ignore log files
+**/*.log
