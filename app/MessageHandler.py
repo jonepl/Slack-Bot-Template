@@ -99,6 +99,7 @@ class MessageHandler(Thread):
         elif(self.isServiceRequest(message)) :
             # TODO: Determine if the two methods should be combined into one
             # TODO: Improve to handle all types of services
+
             serviceName = self.determineService(message)
             scheduleAction, scheduleType, frequency, interval = self.determineSchedule(message);
 
