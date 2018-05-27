@@ -84,8 +84,10 @@ class SlackBot():
             self.botId = self.slack_client.server.login_data['self']['id'];
         return self.botId
 
-    def writeFile(self, channel, filePath, filename) :
-        api_call = self.slack_client.api_call("files.upload", channel=channel, file=filePath, filename=filename);
+    def writeToFile(self, channel, filePath, filename) :
+        print(filePath)
+        daFile =  open(filePath, 'rb')
+        api_call = self.slack_client.api_call("files.upload", channels=channel, file=daFile);
 
 if __name__ == '__main__':
     pass;

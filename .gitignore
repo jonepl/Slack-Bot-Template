@@ -7,3 +7,9 @@ __pycache__
 
 # Ignore personal notes
 Notes.txt
+
+# Ignore log files
+**/*.log
+
+# Ignore vs code files
+.vscode
