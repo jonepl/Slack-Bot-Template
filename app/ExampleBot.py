@@ -36,8 +36,8 @@ class ExampleBot(SlackBot) :
         super().__init__(token, debug);
         self.users = {};
         self.running = False;
-        self.responseQueue = Queue.Queue();
-        self.requestQueue = Queue.Queue();
+        self.messageResponseQueue = Queue.Queue(); # MessageResponseQueue
+        self.messageRequestQueue = Queue.Queue();  # MessageRequestQueue
         self.MessageHandler = None;
         if(self.debug) : logger.debug('ExampleBot successfully created');
 
@@ -49,10 +49,10 @@ class ExampleBot(SlackBot) :
             self.initThread()
             while(self.running) :
                 try:    
-                    rawInput = self.readChannels()
+                    rawInput = self.readChannels();
                     if(self.debug) : logger.debug(rawInput)
                     if (not self.isEmpty(rawInput) and self.notSelf(rawInput) and (self.botMentioned(rawInput) or self.directMessaged(rawInput)) ) :
-                        self.requestQueue.put(rawInput);
+                        self.messageRequestQueue.put(rawInput);
                         if(self.debug) : logger.info("Added message to queue: {}".format(str(rawInput)))
 
                     self.checkResponseQueue();
@@ -64,19 +64,20 @@ class ExampleBot(SlackBot) :
         else :
             if(self.debug) : logger.error("Unable to connect to Slack.")   
 
-    def initThread(self) :
-        self.MessageHandler = MessageHandler(self.requestQueue, self.responseQueue, self.getBotID())
-        self.MessageHandler.setName("MHT 1");
+    def setUpThreads(self) :
+        self.MessageHandler = MessageHandler(self.messageRequestQueue, self.messageResponseQueue, self.getBotID());
+        self.MessageHandler.setName("MessageHandler Thread 1");
         self.MessageHandler.daemon = True;
         self.MessageHandler.start();
         if(self.debug) : logger.info("Started thread: {}".format("MessageHandler Thread 1"))
 
     # Check Queue to see if any messages are ready to be sent
     def checkResponseQueue(self) :
-        if(not self.responseQueue.empty()) :
-            response = self.responseQueue.get();
+        
+        if(not self.messageResponseQueue.empty()) :
+            response = self.messageResponseQueue.get();
             if(self.debug) : logger.info("Response found, handling response: \n{}\n".format(str(response)))
-            self.responseQueue.task_done()
+            self.messageResponseQueue.task_done()
             self.handleResponse(response);
 
     # Utilizes response object to response to user
@@ -86,9 +87,9 @@ class ExampleBot(SlackBot) :
             if(self.debug) : logger.info("Writing message {} to slack channel {}".format(str(response), str(response['channel'])))
             result = self.writeToSlack(response['channel'], response['response'])
         elif(response['action'] == "writeToFile") :
-            # TODO: Handle unsuccess result and log failures
+            # TODO: Make dynamic
             if(self.debug) : logger.info("Writing file {} to slack channel {}".format(str(response), str(response['channel'])))
-            result = self.writeToFile(response['channel'], response['response']);
+            result = self.writeToFile(response['channel'], response['response'])
         else :
             if(self.debug) : logger.warning("Error has occured while handling response {} to channel {}".format(str(response), str(response['channel'])))
 
