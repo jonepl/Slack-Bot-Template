@@ -37,7 +37,12 @@ https://get.slack.help/hc/en-us/articles/215770388-Create-and-regenerate-API-tok
 
 ```python
 slack = {
-    'token' : 'your-token-goes-here'
+    'token' : 'your-token-goes-here',
+    'mongoDB' : {
+        'dbName' : 'DBname',
+        'uri' : 'mongodb://mongoURI',
+        'collectionName' : 'collectionName'
+    }
 }
 ```
 
