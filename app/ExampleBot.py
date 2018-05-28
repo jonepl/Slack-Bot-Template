@@ -6,12 +6,12 @@ Description: Implementation of a Slackbot Abstract Class. This class should have
 from app.SlackBot import SlackBot
 from app.MessageHandler import MessageHandler
 
-import time;
+import time
 try :
     import Queue
 except:
     import queue as Queue
-import logging;
+import logging
 import os
 
 logger = logging.getLogger(__name__)
@@ -33,52 +33,54 @@ logger.addHandler(stream_handler)
 class ExampleBot(SlackBot) :
 
     def __init__(self, token, debug=False):
-        super().__init__(token, debug);
-        self.users = {};
-        self.running = False;
-        self.messageResponseQueue = Queue.Queue(); # MessageResponseQueue
-        self.messageRequestQueue = Queue.Queue();  # MessageRequestQueue
-        self.MessageHandler = None;
-        if(self.debug) : logger.debug('ExampleBot successfully created');
+        super().__init__(token, debug)
+        self.users = {}
+        self.running = False
+        self.messageResponseQueue = Queue.Queue()
+        self.messageRequestQueue = Queue.Queue()
+        self.MessageHandler = None
+        self.debug = debug
+        if(self.debug) : logger.debug('ExampleBot successfully created')
 
     # Entry method for Program
     def run(self) :
         self.running = True
         if(self.connect()) :
             # Starts thread and passes BotID
-            self.initThread()
+            self.setUpThreads()
             while(self.running) :
                 try:    
-                    rawInput = self.readChannels();
+                    rawInput = self.readChannels()
                     if(self.debug) : logger.debug(rawInput)
                     if (not self.isEmpty(rawInput) and self.notSelf(rawInput) and (self.botMentioned(rawInput) or self.directMessaged(rawInput)) ) :
-                        self.messageRequestQueue.put(rawInput);
+
+                        self.messageRequestQueue.put(rawInput)
                         if(self.debug) : logger.info("Added message to queue: {}".format(str(rawInput)))
 
-                    self.checkResponseQueue();
-                    time.sleep(0.5);
+                    self.checkResponseQueue()
+                    time.sleep(0.5)
                 except (KeyboardInterrupt, SystemError) :
-                    if(self.debug) : logger.info("KeyboardInterrupt Exception Found. Kiling MessageHandler Thread");
-                    self.MessageHandler.kill();
-                    self.running = False;
+                    if(self.debug) : logger.info("KeyboardInterrupt Exception Found. Kiling MessageHandler Thread")
+                    self.MessageHandler.kill()
+                    self.running = False
         else :
             if(self.debug) : logger.error("Unable to connect to Slack.")   
 
     def setUpThreads(self) :
-        self.MessageHandler = MessageHandler(self.messageRequestQueue, self.messageResponseQueue, self.getBotID());
-        self.MessageHandler.setName("MessageHandler Thread 1");
-        self.MessageHandler.daemon = True;
-        self.MessageHandler.start();
+        self.MessageHandler = MessageHandler(self.messageRequestQueue, self.messageResponseQueue, self.getBotID(), self.debug)
+        self.MessageHandler.setName("MessageHandler Thread 1")
+        self.MessageHandler.daemon = True
+        self.MessageHandler.start()
         if(self.debug) : logger.info("Started thread: {}".format("MessageHandler Thread 1"))
 
     # Check Queue to see if any messages are ready to be sent
     def checkResponseQueue(self) :
         
         if(not self.messageResponseQueue.empty()) :
-            response = self.messageResponseQueue.get();
+            response = self.messageResponseQueue.get()
             if(self.debug) : logger.info("Response found, handling response: \n{}\n".format(str(response)))
             self.messageResponseQueue.task_done()
-            self.handleResponse(response);
+            self.handleResponse(response)
 
     # Utilizes response object to response to user
     def handleResponse(self, response) :
@@ -97,27 +99,27 @@ class ExampleBot(SlackBot) :
     def directMessaged(self, rawInput) :
         if('channel' in rawInput[0]): 
             if (not self.getGroupInfo(rawInput[0]['channel']).get('ok')) and (not self.getChannelInfo(rawInput[0]['channel']).get('ok')) :
-                return True;
+                return True
             else :
-                return False;
+                return False
         else :
-            return False;
+            return False
     
     # Determines if the bot is mentioned in the raw input
     def botMentioned(self, rawInput) :
         if('text' in rawInput[0]) :
-            if(self.getBotID() in rawInput[0]['text']) : return True;
-        else : return False;
+            if(self.getBotID() in rawInput[0]['text']) : return True
+        else : return False
 
     # Detects if raw input is Empty
     def isEmpty(self, rawInput) :
-        if not rawInput : return True;
+        if not rawInput : return True
         else : return False
 
     # Determines if the raw input was sent by this bot
     def notSelf(self, rawInput) :
-        if(rawInput[0].get('user') == self.getBotID()) : return False;
-        else : return True;
+        if(rawInput[0].get('user') == self.getBotID()) : return False
+        else : return True
 
 if __name__ == '__main__':
     from slackBot import SlackBot

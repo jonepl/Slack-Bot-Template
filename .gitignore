@@ -5,6 +5,9 @@ config/creds.py
 __pycache__
 .pytest_cache/
 
+# Ignore python compile files
+*.pyc
+
 # Ignore personal notes
 Notes.txt
 

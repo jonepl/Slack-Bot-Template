@@ -3,6 +3,7 @@ File: MessageHandler.py
 Description: Handles raw input and determines an appropriate response to send back to the user
 '''
 import random
+import logging
 from threading import Thread
 try :
     import Queue
@@ -12,9 +13,22 @@ except:
 if not __name__ == '__main__':
     from app.ServiceHandler import ServiceHandler
 
-# Sentences we'll respond with if the user greeted us
-SUCCESS = 0;
-FAILURE = -1;
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(levelname)s : %(name)s : %(message)s')
+
+file_handler = logging.FileHandler('logs/MessageHandler.log')
+stream_handler = logging.StreamHandler()
+
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
+
+stream_handler.setFormatter(formatter)
+stream_handler.setLevel(logging.DEBUG)
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
+
 GREETING_KEYWORDS = ["hey", "hi", "greetings", "sup", "hello"]
 SERVICE_KEYWORDS = ["give", "file", "service"]
 GREETING_RESPONSES = ["Sup bro.", "Hey.", "What it do!", "What up homie?", "Howdy."]
@@ -22,79 +36,89 @@ SERVICES_TYPES = [{"tempservice" : "hello_world"}, { "file" : "file_service"}]
 
 class MessageHandler(Thread):
     
-    def __init__(self, requestQueue, responseQueue, botID) :
+    def __init__(self, requestQueue, responseQueue, botID, debug) :
         Thread.__init__(self)
-        self.running = True;
-        self.requestQueue = requestQueue;
-        self.responseQueue = responseQueue;
+        self.messageRequestQueue = requestQueue
+        self.messageResponseQueue = responseQueue
         self.serviceRequestQueue = Queue.Queue()
         self.serviceResponseQueue = Queue.Queue()
         self.serviceHandler = None
         self.botID = botID
-        #self.ServiceManager = ServiceManager(self.servicesQueue);
+        self.debug = debug
+        if(self.debug) : logger.debug('MessageHandler successfully created')
 
     # Entry point for thread
     def run(self) :
-        
+        self.running = True
         self.setUpThreads()
         # TODO: Figure out multi-threaded solution
         while(self.running) :
             try :
-                if(self.requestQueue.qsize() > 0) : 
-                    rawInput = self.requestQueue.get()
-                    self.handle(rawInput)
+                if(self.messageRequestQueue.qsize() > 0) : 
+                    message = self.messageRequestQueue.get()
+                    if(self.debug) : logger.debug("Message requested received from Bot {}".format(str(message)))
+                    self.handle(message)
 
                 elif(self.serviceResponseQueue.qsize() > 0) :
                     response = self.serviceResponseQueue.get()
-                    self.responseQueue.put(response)
+                    if(self.debug) : logger.debug("Message response received from ServiceHandler {}".format(str(response)))
+                    self.messageResponseQueue.put(response)
             
             except(KeyboardInterrupt, SystemError) :
-                print("\n~~~~~~~~~~~ MessageHandler KeyboardInterrupt Exception Found~~~~~~~~~~~\n");
-                self.ServiceHandler.kill();
-                self.running = False;
+                if(self.debug) : logger.debug("\n~~~~~~~~~~~ MessageHandler KeyboardInterrupt Exception Found~~~~~~~~~~~\n")
+                self.ServiceHandler.kill()
+                self.running = False
 
 
     def setUpThreads(self) :
-        self.serviceHandler = ServiceHandler(self.serviceRequestQueue, self.serviceResponseQueue);
-        self.serviceHandler.setName("Messaging Thread 1");
-        self.serviceHandler.daemon = True;
-        self.serviceHandler.start();
+        self.serviceHandler = ServiceHandler(self.serviceRequestQueue, self.serviceResponseQueue)
+        self.serviceHandler.setName("ServiceHandler Thread 1")
+        self.serviceHandler.daemon = True
+        self.serviceHandler.start()
+        if(self.debug) : logger.info("Started thread: {}".format("ServiceHandler Thread 1"))
 
     # Parses all raw input from Slack
     def handle(self, rawInput):
         
         response = None
         if (not self.isEmpty(rawInput)) :
-            if(self.isAValidMessage(rawInput)) :
-                response = self.parseInput(rawInput);
-                # DEBUG print(response)
-                self.responseQueue.put(response);
-                # DEBUG print("Completed SUCCESS");
+            if(self.isAValidMessage(rawInput) or not self.isTyping(rawInput)) :
+
+                response = self.parseInput(rawInput)
+                if(self.debug) : logger.debug("Handling valid message: {}".format("response"))
+                if(response != None) :
+                    self.messageResponseQueue.put(response)
 
             else :
-                print("Error: Invalid non-empty message received.");
+                if(self.debug) : logger.error("Invalid non-empty message received: {}".format(rawInput))
     
     # Kills Thread run method
     def kill(self) :
-        self.running = False;
+        self.running = False
+        if(self.debug) : logger.info("Terminating MessageHandler")
 
     # Parses the raw slack input into parts
     def parseInput(self, rawInput) :
 
-        user = rawInput[0]['user']
-        message = rawInput[0]['text']
-        channel = rawInput[0]['channel']
+        if('user' in rawInput[0] and 'text' in rawInput[0] and 'channel' in rawInput[0]) :
+            user = rawInput[0]['user']
+            message = rawInput[0]['text']
+            channel = rawInput[0]['channel']
 
-        # Muscle logic 
-        action, response = self.determineAction(str(user), str(self.stripTag(message)), str(channel))
-        responseObject = self.generateMessageResponse(user, message, channel, action, response);
+            # Muscle logic 
+            action, response = self.determineAction(str(user), str(self.stripTag(message)), str(channel))
+            responseObject = self.generateMessageResponse(user, message, channel, action, response)
 
-        return responseObject;
+            return responseObject
+        else :
+            logger.warning("rawInput not valid. Modify handle criterion. {}".format(str(rawInput[0])))
+            return None
 
     # Determine what action to take depending on the message
     def determineAction(self, userID, message, channel) :
         
         if(self.isGreeting(message)) :
+            if(self.debug) : logger.debug("Greeting found return random choice")
             return ("writeToSlack", random.choice(GREETING_RESPONSES))
 
         elif(self.isServiceRequest(message)) :
@@ -102,32 +126,46 @@ class MessageHandler(Thread):
             # TODO: Improve to handle all types of services
 
             serviceName = self.determineService(message)
-            scheduleAction, scheduleType, frequency, interval = self.determineSchedule(message);
+            scheduleAction, scheduleType, frequency, interval = self.determineSchedule(message)
 
             if(serviceName is not None) :
                 serviceRequest = self.createServiceRequest(scheduleAction, userID, channel, serviceName, scheduleType, frequency, interval)
                 self.serviceRequestQueue.put(serviceRequest)
-                return ("writeToSlack", "Working on processing Service for message: " + self.stripTag(message) + " ...");
+                return ("writeToSlack", "Working on processing Service for message: " + self.stripTag(message) + " ...")
             else :
-                return ("writeToSlack", "Sorry I wasn't able to find a service for message: " + self.stripTag(message) + " ...");
+                return ("writeToSlack", "Sorry I wasn't able to find a service for message: " + self.stripTag(message) + " ...")
 
         else :
             return ("writeToSlack", "Im not sure how to decipher \"" + self.stripTag(message) + "\".")
 
     def generateMessageResponse(self, user, message, channel, action=None, response=None) :
         
-        responseObject = {};
-        responseObject["user"] = str(user);
-        responseObject['message'] = str(self.stripTag(message));
-        responseObject['channel'] = str(channel);
-        responseObject['action'] = action;
+        responseObject = {}
+        responseObject["user"] = str(user)
+        responseObject['message'] = str(self.stripTag(message))
+        responseObject['channel'] = str(channel)
+        responseObject['action'] = action
         responseObject['response'] = response
 
+        if(self.debug) : logger.debug("Generating responseObject: {}".format(str(responseObject)))
         return responseObject
 
+    # FIXME Determine better way to parse user input and send appropriate service
     def determineSchedule(self, message) :
+        
+        result = None
+        
+        for service in SERVICES_TYPES :
+            for key, value in service.items():
+                if(key in message.lower() and ("new" in message.lower() or  "remove" in message.lower() )) :
+                    if("new" in message.lower()) :
+                        result = "add"
+                    elif("remove" in message.lower()) :
+                        result = "remove"
+                    break
+
         #TODO Figure out a way to parse user messages to determine action, scheduleType, frequency, and interval
-        return ('add', 'intra-day', 'seconds', 30)
+        return (result, 'intra-day', 'seconds', 30)
 
     def createServiceRequest(self, scheduleAction, userId, channel, service, scheduleType, frequency, interval, time = None, day = None ) :
         serviceRequest = {
@@ -152,11 +190,11 @@ class MessageHandler(Thread):
 
         return serviceRequest
 
-    #FIXME: make this dynamic
+    # FIXME Determine better way to parse user input and send appropriate service
     def determineService(self, message) :
         
         result = None
-        # FIXME Determine better way to parse user input and send appropriate service
+        
         for service in SERVICES_TYPES :
             for key, value in service.items():
                 if(key in message.lower()) :
@@ -165,67 +203,51 @@ class MessageHandler(Thread):
 
         return result
 
-    def getEmptyJobRequest(self) :
-        return {
-            'action' : None,
-            'job' : { 
-                'slackUserId' : None,
-                'channel' : None,
-                'service' : None,
-                'schedule' : {
-                    'type' : None,
-                    'frequency' : None,
-                    'interval' : None,
-                    'time' : None,
-                    'day' : None   
-                }
-            }
-        }
-
     # Determines if a message contains a greeting word
     def isGreeting(self, message) :
         for greeting in GREETING_KEYWORDS :
             if(greeting in message.lower()) :
-                return True;
-        return False;
+                return True
+        return False
 
     # TODO Implement to interact Service Manager
     def isServiceRequest(self, message) :
         for command in SERVICE_KEYWORDS :
             if(command in message.lower()) :
-                return True;
-        return False;
+                return True
+        return False
 
     # Removes the Slack bot ID from a message
     def stripTag(self, message) :
         botTag = "<@" + self.botID + ">"
-        return message.replace(botTag, '');
+
+        return message.replace(botTag, '').rstrip()
 
     # Determines if the raw input was sent by this bot
     def notSelf(self, rawInput) :
-        if(rawInput[0].get('user') == self.botID) : return False;
-        else : return True; 
+        if(rawInput[0].get('user') == self.botID) : return False
+        else : return True 
     
     # Detect if a users is typing
     def isTyping(self, rawInput) :
-        if(rawInput[0].get('type') == 'user_typing') : return True;
+        if(rawInput[0].get('type') == 'user_typing') : return True
         else : return False
 
     # Detects if raw input is Empty
     def isEmpty(self, rawInput) :
-        if not rawInput : return True;
+        if not rawInput : return True
         else : return False
 
     # Detects if the raw input is a message
     def isAValidMessage(self, rawInput) :
-        if(rawInput[0].get('type') == 'message') : return True;
-        else : return False;
+        if(rawInput[0].get('type') == 'message') : return True
+        else : return False
 
     # Determines if the bot is mentioned in the raw input
     def botMentioned(self, rawInput) :
         if('text' in rawInput[0]) :
-            if(self.getBotID() in rawInput[0]['text']) : return True;
-        else : return False;
+            if(self.botID in rawInput[0]['text']) : return True
+        else : return False
     
 
     '''Example Message Handling using Textblob'''
@@ -266,10 +288,10 @@ class MessageHandler(Thread):
     #     return resp
 
 if __name__ == '__main__' :
-    reqQ = Queue.Queue(3);
-    resQ = Queue.Queue(3);
+    reqQ = Queue.Queue(3)
+    resQ = Queue.Queue(3)
     text = input("Enter message for message Handler Class:\n> ")
     rInput = [{'text': text, 'user': 'U9H1FCNG4', 'team': 'T9GMMDTPG', 'channel': 'D9GCAPGNL', 'bot_id': 'B9H5NKUHK', 'ts': '1524798523.000234', 'type': 'message', 'event_ts': '1524798523.000234'}]
-    mh = MessageHandler(reqQ, resQ, "R2D2");
-    mh.handle(rInput);
+    mh = MessageHandler(reqQ, resQ, "R2D2")
+    mh.handle(rInput)
 

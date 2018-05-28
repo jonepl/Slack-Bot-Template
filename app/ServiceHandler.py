@@ -35,8 +35,8 @@ class ServiceHandler(Thread) :
                 schedule.run_pending()
                 self.checkJobQueue() 
             except(KeyboardInterrupt, SystemError) :
-                print("\n~~~~~~~~~~~ ServiceHandler KeyboardInterrupt Exception Found~~~~~~~~~~~\n");
-                self.running = False;
+                print("\n~~~~~~~~~~~ ServiceHandler KeyboardInterrupt Exception Found~~~~~~~~~~~\n")
+                self.running = False
 
     # Checks for updates of jobs
     def checkJobQueue(self) :
@@ -48,13 +48,29 @@ class ServiceHandler(Thread) :
 
             if(request['scheduleJob']['action'] == 'add') :
 
-                self.scheduleJob(request)
-                #self.saveJob(request)
+                scheduleStatus = self.scheduleJob(request)
+                self.saveJob(request)
+
+                # TODO: Find beter way to confirm that the service was accepted
+                if(scheduleStatus == 0) :
+                    message = request
+                    message['messageInfo']['action'] = 'writeToSlack'
+                    message['messageInfo']['responseType'] = 'text'
+                    message['messageInfo']['response'] = "Successfully scheduled and saved {} service request of type {} every {} {}.".format(message['scheduleJob']['serviceName'], message['scheduleJob']['type'], str(message['scheduleJob']['interval']), message['scheduleJob']['frequency'] )
+                    self.serviceResponseQueue.put(message['messageInfo'])
+                
 
             elif(request['scheduleJob']['action'] == 'remove') :
 
-                self.unscheduleJob(request['job'])
-                #self.deleteJob(request['job'])
+                scheduleStatus = self.unscheduleJob(request)
+                self.deleteJob(request)
+
+                if(scheduleStatus == 0) :
+                    message = request
+                    message['messageInfo']['action'] = 'writeToSlack'
+                    message['messageInfo']['responseType'] = 'text'
+                    message['messageInfo']['response'] = "Successfully unscheduled and removed {} service request of type {} every {} {}.".format(message['scheduleJob']['serviceName'], message['scheduleJob']['type'], str(message['scheduleJob']['interval']), message['scheduleJob']['frequency'] )
+                    self.serviceResponseQueue.put(message['messageInfo'])
             
             elif(request['scheduleJob']['action'] == 'update') :
                 pass
@@ -95,6 +111,8 @@ class ServiceHandler(Thread) :
     # Adds a job to Scheduler
     def scheduleJob(self, request) :
         
+        status = 0
+
         if(self.isIntraDay(request)) :
             self.scheduleIntraDayJob(request)
 
@@ -108,29 +126,21 @@ class ServiceHandler(Thread) :
 
         else :
             pass
-    
-    # FIXME: This is a quick and dirty way to get functionality
-    def getFunction(self, serviceName) :
-        # FIXME: Need a better way to store service functionality between MessageHandler and ServiceHandler
-        SERVICE_FUNC = [{"hello_world" : self.helloJob}, {"file_service" : self.fileJob}]
-
-        result = None
-        for service in SERVICE_FUNC :
-            for key, value in service.items():
-                if(key in serviceName.lower()) :
-                    result = value
-                    break
-        
-        return result
+        return status
 
     # Removes schedule jobs from schedule
     def unscheduleJob(self, job) :
+
+        status = 0
+
         tag = job['messageInfo']['slackUserId'] + "_" + job['scheduleJob']['serviceName']
         schedule.clear(tag)
+
+        return status
         
     # Helper method: Adds a new intra-day schedule job
     def scheduleIntraDayJob(self, request) :
-        func = self.getFunction(request['scheduleJob']['serviceName'])
+        func = self.getServiceFunction(request['scheduleJob']['serviceName'])
         frequency = request['scheduleJob']['frequency']
         interval = request['scheduleJob']['interval']
         #TODO: remove set value from messagehandler and determine serivceName within this file
@@ -148,6 +158,20 @@ class ServiceHandler(Thread) :
         else :
             print("ERROR OCCURRED")
     
+    # FIXME: This is a quick and dirty way to get functionality
+    def getServiceFunction(self, serviceName) :
+        # FIXME: Need a better way to store service functionality between MessageHandler and ServiceHandler
+        SERVICE_FUNC = [{"hello_world" : self.helloJob}, {"file_service" : self.fileJob}]
+
+        result = None
+        for service in SERVICE_FUNC :
+            for key, value in service.items():
+                if(key in serviceName.lower()) :
+                    result = value
+                    break
+        
+        return result
+
     # Helper method: Adds a new intra month schedule job
     def scheduleIntraMonthJob(self, job) :
         pass

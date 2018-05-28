@@ -3,13 +3,13 @@ File: SlackBot.py
 Description: Abstraction of a Slackbot implementation. This class should have all general functionality
              for an instance of a Slackbot.
 '''
-from slackclient import SlackClient;
+from slackclient import SlackClient
 
-import sys;
-from abc import ABCMeta, abstractmethod;
-import time;
-import io;
-import logging;
+import sys
+from abc import ABCMeta, abstractmethod
+import time
+import io
+import logging
 
 try :
     import Queue
@@ -35,62 +35,62 @@ logger.addHandler(stream_handler)
 class SlackBot():
     def __init__(self, token=None, debug=False):
         if(token is None) :
-            if(debug) : logger.error('A valid token must be past as a parameter');
-            sys.exit(-1);
-        self.debug = debug;
-        self.requestQueue = None;
-        self.responseQueue = None;
-        self.token = token;
+            if(debug) : logger.error('A valid token must be past as a parameter')
+            sys.exit(-1)
+        self.debug = debug
+        self.requestQueue = None
+        self.responseQueue = None
+        self.token = token
         self.botId = None
-        self.botName = None;
-        self.slack_client = SlackClient(self.token);
+        self.botName = None
+        self.slack_client = SlackClient(self.token)
         if(self.debug) : logger.debug('SlackBot instance successfully created.')
 
     # Connects to slack
     def connect(self):
         if(self.debug) : logger.info('Connection to Slack via token')
-        return self.slack_client.rtm_connect(self.token);
+        return self.slack_client.rtm_connect(self.token)
 
     # Reads all channels and return raw input
     def readChannels(self):
-        return self.slack_client.rtm_read();
+        return self.slack_client.rtm_read()
 
     # Writes the message to specified slack channel
     def writeToSlack(self, channel, message):
-        return self.slack_client.api_call('chat.postMessage', channel=channel, text = message, as_user=True);
+        return self.slack_client.api_call('chat.postMessage', channel=channel, text = message, as_user=True)
 
     # Attaches a file or a code snippet to slack channel
     def writeToFile(self, channel, filePath) :
-        return self.slack_client.api_call("files.upload", channels=channel, file=open(filePath, 'rb')); 
+        return self.slack_client.api_call("files.upload", channels=channel, file=open(filePath, 'rb')) 
 
     # Retrieves a detailed list of all members in slack group
     def getMemberList(self):
-        api_call = self.slack_client.api_call("users.list");
+        api_call = self.slack_client.api_call("users.list")
         if api_call.get('ok'):
-            return api_call.get('members');
+            return api_call.get('members')
         else :
             if(self.debug) : logger.error("Issue occurred when getting member list")
 
     # Retrieves a detailed list of all channels in slack
     def getChannelList(self) :
-        api_call = self.slack_client.api_call("channels.list");
+        api_call = self.slack_client.api_call("channels.list")
         if api_call.get('ok'):
-            return api_call;
+            return api_call
         else :
             if(self.debug) : logger.error("Issue occurred when getting channel list")
 
     # Handles raw input slack and determines what action to take
     def parseRawInput(self, input):
-        raise NotImplementedError("Please Implement this method.");
+        raise NotImplementedError("Please Implement this method.")
 
     # TODO: Implement this for debugging
     def userIdToUserName(self):
-        pass;
+        pass
 
     # Retrieves channel information
     def getChannelInfo(self, channel) :
         api_call = self.slack_client.api_call("channels.info", channel=channel)
-        return api_call;
+        return api_call
 
     # Retrieves group information
     def getGroupInfo(self, channel) :
@@ -99,19 +99,19 @@ class SlackBot():
 
     # TODO: Implement this
     def getBotInfo(self) :
-        pass;
+        pass
 
     # Retrieves the name of the bot
     def getBotName(self) :
         if(self.botName is None) :
-            self.botName = self.slack_client.server.login_data['self']['name'];
+            self.botName = self.slack_client.server.login_data['self']['name']
         return self.botName
 
     # Retrieves the bot's ID
     def getBotID(self):
         if(self.botId is None) :
-            self.botId = self.slack_client.server.login_data['self']['id'];
+            self.botId = self.slack_client.server.login_data['self']['id']
         return self.botId
 
 if __name__ == '__main__':
-    pass;
+    pass
