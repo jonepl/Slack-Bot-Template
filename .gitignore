@@ -5,11 +5,14 @@ config/creds.py
 __pycache__
 .pytest_cache/
 
+# Ignore python compile files
+*.pyc
+
 # Ignore personal notes
 Notes.txt
 
-# Ignore extra files for testing
-/extras/files/textFile.txt
-
 # Ignore log files
 **/*.log
+
+# Ignore vs code files
+.vscode
