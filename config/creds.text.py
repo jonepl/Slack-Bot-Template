@@ -3,5 +3,10 @@
 #        rename this file to creds.py. Place token in the Python dictionary below.
 
 slack = {
-    'token' : 'your-token-goes-here'
+    'token' : 'your-token-goes-here',
+    'mongoDB' : {
+        'dbName' : 'DBname',
+        'uri' : 'mongodb://mongoURI',
+        'collectionName' : 'collectionName'
+    }
 }
