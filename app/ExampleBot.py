@@ -3,8 +3,9 @@ File: ExampleBot.py
 Description: Implementation of a Slackbot Abstract Class. This class should have all bot specific functionality
              for an instance of a Slackbot.
 '''
-from app.SlackBot import SlackBot
-from app.MessageHandler import MessageHandler
+
+from SlackBot import SlackBot
+from MessageHandler import MessageHandler
 
 import time
 try :
@@ -60,7 +61,7 @@ class ExampleBot(SlackBot) :
                     self.checkResponseQueue()
                     time.sleep(0.5)
                 except (KeyboardInterrupt, SystemError) :
-                    if(self.debug) : logger.info("KeyboardInterrupt Exception Found. Kiling MessageHandler Thread")
+                    if(self.debug) : logger.info("KeyboardInterrupt Exception Found. Killing MessageHandler Thread")
                     self.MessageHandler.kill()
                     self.running = False
         else :
@@ -92,6 +93,9 @@ class ExampleBot(SlackBot) :
             # TODO: Make dynamic
             if(self.debug) : logger.info("Writing file {} to slack channel {}".format(str(response), str(response['channel'])))
             result = self.writeToFile(response['channel'], response['response'])
+        elif(response['action'] == "writeToSharedFile") :
+            if(self.debug) : logger.debug("Writing shared file {} to slack channel {}".format(str(response), str(response['channel'])))
+            result = self.writeToSharedFile(response['channel'], response['response'])
         else :
             if(self.debug) : logger.warning("Error has occured while handling response {} to channel {}".format(str(response), str(response['channel'])))
 

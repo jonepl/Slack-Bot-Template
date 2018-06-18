@@ -15,7 +15,6 @@ sys.path.append(config)
 from MessageHandler import MessageHandler
 
 messageHandler = None
-request = None
 rawInput1 = None
 rawInput2 = None
 rawInput3 = None
@@ -45,7 +44,11 @@ def test_parseInput() :
     }
     result = messageHandler.parseInput(rawInput1)
 
-    assert(result == expected)
+    assert(result["user"] == expected["user"])
+    assert(result["message"] == expected["message"])
+    assert(result["channel"] == expected["channel"])
+    assert(result["action"] == expected["action"])
+    assert(not result["response"] == False)
 
 def test_stripTag() :
 
@@ -54,8 +57,37 @@ def test_stripTag() :
 
     assert(message == result)
 
+def test_determineSchedule_Add_Happy() :
+
+    message = "new intro services"
+    expected = ("add", 'intra-day', 'seconds', 30)
+
+    result = messageHandler.determineSchedule(message)
+
+    assert(result == expected)
+
+def test_determineSchedule_Remove_Happy() :
+
+    message = "remove intro services"
+    expected = ("remove", 'intra-day', 'seconds', 30)
+
+    result = messageHandler.determineSchedule(message)
+
+    assert(result == expected)
+
+def test_determineSchedule_Update_Happy() :
+
+    message = "update intro services"
+    expected = ("update", 'intra-day', 'seconds', 30)
+
+    result = messageHandler.determineSchedule(message)
+
+    assert(result == expected)
+
 def test_botMentioned() :
 
     result = messageHandler.botMentioned(rawInput1)
 
     assert(result == True)
+
+    #python3 -m pytest

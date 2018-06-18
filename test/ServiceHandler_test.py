@@ -49,6 +49,11 @@ def test_unscheduleJob() :
 
     #assert(schedule.jobs == 0)
 
+# TODO: Decouple ServiceValidatore from Config file
+def test_setUpServiceFunction() :
+    pass
+
+
 def test_produceTag():
 
     expectedTag = request['messageInfo']['slackUserId'] + "_" + request['scheduleJob']['serviceName']

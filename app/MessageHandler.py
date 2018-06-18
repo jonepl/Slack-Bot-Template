@@ -10,8 +10,12 @@ try :
 except:
     import queue as Queue
 
-if not __name__ == '__main__':
-    from app.ServiceHandler import ServiceHandler
+from ServiceHandler import ServiceHandler
+from ServiceManager import ServiceManager
+
+# if not __name__ == '__main__':
+#     from app.ServiceHandler import ServiceHandler
+#     import app.ServiceManager
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -30,13 +34,13 @@ logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
 GREETING_KEYWORDS = ["hey", "hi", "greetings", "sup", "hello"]
-SERVICE_KEYWORDS = ["give", "file", "service"]
+SERVICE_KEYWORDS = ["give", "file", "service", "subscribe"]
 GREETING_RESPONSES = ["Sup bro.", "Hey.", "What it do!", "What up homie?", "Howdy."]
 SERVICES_TYPES = [{"tempservice" : "hello_world"}, { "file" : "file_service"}]
 
 class MessageHandler(Thread):
     
-    def __init__(self, requestQueue, responseQueue, botID, debug) :
+    def __init__(self, requestQueue, responseQueue, botID, debug=False) :
         Thread.__init__(self)
         self.messageRequestQueue = requestQueue
         self.messageResponseQueue = responseQueue
@@ -45,6 +49,7 @@ class MessageHandler(Thread):
         self.serviceHandler = None
         self.botID = botID
         self.debug = debug
+        self.serviceManager = ServiceManager()
         if(self.debug) : logger.debug('MessageHandler successfully created')
 
     # Entry point for thread
@@ -71,7 +76,7 @@ class MessageHandler(Thread):
 
 
     def setUpThreads(self) :
-        self.serviceHandler = ServiceHandler(self.serviceRequestQueue, self.serviceResponseQueue)
+        self.serviceHandler = ServiceHandler(self.serviceRequestQueue, self.serviceResponseQueue, self.debug)
         self.serviceHandler.setName("ServiceHandler Thread 1")
         self.serviceHandler.daemon = True
         self.serviceHandler.start()
@@ -85,7 +90,7 @@ class MessageHandler(Thread):
             if(self.isAValidMessage(rawInput) or not self.isTyping(rawInput)) :
 
                 response = self.parseInput(rawInput)
-                if(self.debug) : logger.debug("Handling valid message: {}".format("response"))
+                if(self.debug) : logger.debug("Handling valid message: {}".format(response))
                 if(response != None) :
                     self.messageResponseQueue.put(response)
 
@@ -121,12 +126,24 @@ class MessageHandler(Thread):
             if(self.debug) : logger.debug("Greeting found return random choice")
             return ("writeToSlack", random.choice(GREETING_RESPONSES))
 
+        elif(self.isServiceListRequest(message)) :
+            serviceList = self.serviceManager.getServicesNames()
+            response = "Available Services\n"
+            for index, service in enumerate(serviceList) :
+                response += "\t{}. {}\n".format(index+1, service)
+            
+            if(self.debug) : logger.debug("Service List Request found {}".format(response))
+
+            return ("writeToSlack", response)
+
         elif(self.isServiceRequest(message)) :
             # TODO: Determine if the two methods should be combined into one
             # TODO: Improve to handle all types of services
-
-            serviceName = self.determineService(message)
+            
+            serviceName = self.extractServiceName(message)
             scheduleAction, scheduleType, frequency, interval = self.determineSchedule(message)
+
+            if(self.debug) : logger.debug("Service Request for serviceName: {} scheduleAction: {}, scheduleType: {}, frequency: {}, interval {}".format(serviceName, scheduleAction, scheduleType, frequency, interval))
 
             if(serviceName is not None) :
                 serviceRequest = self.createServiceRequest(scheduleAction, userID, channel, serviceName, scheduleType, frequency, interval)
@@ -154,20 +171,25 @@ class MessageHandler(Thread):
     def determineSchedule(self, message) :
         
         result = None
-        
-        for service in SERVICES_TYPES :
-            for key, value in service.items():
-                if(key in message.lower() and ("new" in message.lower() or  "remove" in message.lower() )) :
+        serviceNames = self.serviceManager.getServicesNames()
+        for serviceName in serviceNames :
+
+                if(serviceName.lower() in message.lower()) :
                     if("new" in message.lower()) :
                         result = "add"
                     elif("remove" in message.lower()) :
                         result = "remove"
+                    elif("update" in message.lower()) :
+                        result = "update"
                     break
 
         #TODO Figure out a way to parse user messages to determine action, scheduleType, frequency, and interval
         return (result, 'intra-day', 'seconds', 30)
 
     def createServiceRequest(self, scheduleAction, userId, channel, service, scheduleType, frequency, interval, time = None, day = None ) :
+
+        if(self.debug) : logger.debug("Create service request with scheduleAction {} userId {} channel {} service {} schedultType {} frequency {} interval {}time {}  day {}".format(scheduleAction, userId, channel, service, scheduleType, frequency, interval, time, day))
+
         serviceRequest = {
             'messageInfo' : { 
                 'action': None,
@@ -188,18 +210,20 @@ class MessageHandler(Thread):
             }
         }
 
+        if(self.debug) : logger.info("Created ServiceRequest {}".format(serviceRequest))
+
         return serviceRequest
 
     # FIXME Determine better way to parse user input and send appropriate service
-    def determineService(self, message) :
+    def extractServiceName(self, message) :
         
         result = None
-        
-        for service in SERVICES_TYPES :
-            for key, value in service.items():
-                if(key in message.lower()) :
-                    result = value
-                    break
+        serviceNameList = self.serviceManager.getServicesNames()
+
+        for serviceName in serviceNameList :
+            if( serviceName.lower() in message.lower() ) :
+                result = serviceName
+                break
 
         return result
 
@@ -209,6 +233,11 @@ class MessageHandler(Thread):
             if(greeting in message.lower()) :
                 return True
         return False
+
+    # #TODO: Improve this
+    def isServiceListRequest(self, message) :
+        if('list' in message.lower() and 'services' in message.lower()) : return True
+        else : return False
 
     # TODO Implement to interact Service Manager
     def isServiceRequest(self, message) :

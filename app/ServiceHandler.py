@@ -1,28 +1,48 @@
 from threading import Thread
 
-import os
-import schedule
-import time
-import sys
-import pymongo
+import os, time, sys, pymongo, subprocess, schedule, logging, json
+
+import creds as config
 
 try :
     import Queue
 except:
     import queue as Queue
-sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-import config.creds as config
+
+from ServiceManager import ServiceManager
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(levelname)s : %(name)s : %(message)s')
+
+file_handler = logging.FileHandler('logs/ServiceHandler.log')
+stream_handler = logging.StreamHandler()
+
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
+
+stream_handler.setFormatter(formatter)
+stream_handler.setLevel(logging.DEBUG)
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
+
+SERVICE_FUNCTION = {}
 
 class ServiceHandler(Thread) :
 
-    def __init__(self, serviceRequestQueue, serviceResponseQueue) :
+    def __init__(self, serviceRequestQueue, serviceResponseQueue, debug=False) :
         Thread.__init__(self)
         client = pymongo.MongoClient( config.slack['mongoDB']['uri'] )
         db = client[ config.slack['mongoDB']['dbName'] ]
         self.collection = db[ config.slack['mongoDB']['collectionName'] ]
         self.running = True
+        self.debug = debug
         self.serviceRequestQueue = serviceRequestQueue
         self.serviceResponseQueue = serviceResponseQueue
+        self.serviceManager = ServiceManager()
+        self.serviceFunctions = self.setUpServiceFunctions()
+        if(self.debug) : logger.debug('ServiceHandler successfully created')
 
     # Entry point for thread
     def run(self) :
@@ -45,6 +65,8 @@ class ServiceHandler(Thread) :
             
             request = self.serviceRequestQueue.get()
             self.serviceRequestQueue.task_done()
+            
+            if(self.debug) : logger.info("ServiceHandler request found {}".format(request))
 
             if(request['scheduleJob']['action'] == 'add') :
 
@@ -113,6 +135,8 @@ class ServiceHandler(Thread) :
         
         status = 0
 
+        if(self.debug) : logger.debug("Scheduling Job ...")
+
         if(self.isIntraDay(request)) :
             self.scheduleIntraDayJob(request)
 
@@ -125,13 +149,17 @@ class ServiceHandler(Thread) :
             #self.scheduleIntraYearJob(request)
 
         else :
-            pass
+            if(self.debug) : logger.error("Unable to schedule Job")
+            status = -1
+
         return status
 
     # Removes schedule jobs from schedule
     def unscheduleJob(self, job) :
 
         status = 0
+
+        if(self.debug) : logger.debug("Unscheduling Job ...")
 
         tag = job['messageInfo']['slackUserId'] + "_" + job['scheduleJob']['serviceName']
         schedule.clear(tag)
@@ -140,37 +168,71 @@ class ServiceHandler(Thread) :
         
     # Helper method: Adds a new intra-day schedule job
     def scheduleIntraDayJob(self, request) :
-        func = self.getServiceFunction(request['scheduleJob']['serviceName'])
+        
+        serviceName = request['scheduleJob']['serviceName']
+        func = self.serviceFunctions[serviceName]
         frequency = request['scheduleJob']['frequency']
         interval = request['scheduleJob']['interval']
-        #TODO: remove set value from messagehandler and determine serivceName within this file
-        tag = request['messageInfo']['slackUserId'] + "_" + request['scheduleJob']['serviceName']
 
-        if frequency == 'minutes':
-            schedule.every(interval).minutes.do(func, request['messageInfo']).tag(tag)
+        args = {}
 
-        elif frequency == 'seconds' :
-            schedule.every(interval).seconds.do(func, request['messageInfo']).tag(tag)
+        args['runnerInfo'] = self.serviceManager.getServiceDetails(serviceName)
+        args['messageInfo'] = request['messageInfo']
 
-        elif frequency == 'hours' :
-            schedule.every(interval).hours.do(func, request['messageInfo']).tag(tag)
+        # NOTE: When would args be None?
+        if( args is not None ) :
+            #TODO: remove set value from messagehandler and determine serivceName within this file
+            tag = request['messageInfo']['slackUserId'] + "_" + request['scheduleJob']['serviceName']
 
+            if frequency == 'minutes':
+                schedule.every(interval).minutes.do(func, args).tag(tag)
+
+            elif frequency == 'seconds' :
+                schedule.every(interval).seconds.do(func, args).tag(tag)
+
+            elif frequency == 'hours' :
+                schedule.every(interval).hours.do(func, args).tag(tag)
+
+            else :
+                print("ERROR OCCURRED")
         else :
-            print("ERROR OCCURRED")
-    
-    # FIXME: This is a quick and dirty way to get functionality
-    def getServiceFunction(self, serviceName) :
-        # FIXME: Need a better way to store service functionality between MessageHandler and ServiceHandler
-        SERVICE_FUNC = [{"hello_world" : self.helloJob}, {"file_service" : self.fileJob}]
+            print("Error Occurred while searching for ServiceDetails")
 
-        result = None
-        for service in SERVICE_FUNC :
-            for key, value in service.items():
-                if(key in serviceName.lower()) :
-                    result = value
-                    break
+    def setUpServiceFunctions(self) :
         
-        return result
+        serviceFunc = {}
+
+        services = self.serviceManager.getAllServices()
+        
+        for service in services :
+            serviceName = service['name']
+            location = service['path']
+
+            if(location.lower() == "internal") :
+                methodName = service['entrypoint']
+                if(self.isValidMethod(methodName)) :
+                    function = self.getFunc(methodName)
+                    serviceFunc[serviceName] = function
+            else :
+
+                serviceFunc[serviceName] = self.runExternalService
+
+        if(self.debug) : logger.info("Setup Function list as {}".format(serviceFunc))
+
+        return serviceFunc
+
+    def runExternalService(self, args) :
+        cmd = args['runnerInfo']['language']
+        filepath = args['runnerInfo']['path'] + "/"+ args['runnerInfo']['entrypoint']
+        
+        output = subprocess.check_output([cmd, filepath])
+        response = self.serviceManager.generateSlackResponse(output, args['messageInfo'])
+        
+        if(not response == False) :
+            if(self.debug) : logger.info("Returning response up to MessageHandler: {}".format(response))
+            self.serviceResponseQueue.put(response)
+        else :
+            print("~~~~~~~~~~~~~ Error occurred Generating Response~~~~~~~~~~~~~~~")
 
     # Helper method: Adds a new intra month schedule job
     def scheduleIntraMonthJob(self, job) :
@@ -179,6 +241,14 @@ class ServiceHandler(Thread) :
     # Helper method: Adds a new intra year schedule job
     def scheduleIntraYearJob(self, job) :
         pass
+
+    # NOTE: Probably can simple this method and the one below
+    def isValidMethod(self, methodName) :
+        return callable(getattr(self, methodName))
+
+    # Possibly can be moved into ServiceManager
+    def getFunc(self, methodName) :
+        return getattr(self, methodName)
 
     # Terminates thread loop
     def kill(self) :
@@ -225,10 +295,10 @@ if __name__ == '__main__':
                 'response' : None           # message or filepath
             },
             'scheduleJob' : {
-                'action' : 'remove',
+                'action' : 'add',
                 'type' : 'intra-day',
-                'serviceName' : 'hello_world',  # determined in MessageHandler for now
-                'frequency' : 'minutes',
+                'serviceName' : 'Interal Service',  # determined in MessageHandler for now
+                'frequency' : 'seconds',
                 'interval' : 30,
                 'time' : None,
                 'day' : None   
@@ -238,7 +308,18 @@ if __name__ == '__main__':
     serviceRequestQueue.put(request)
     scheduler = ServiceHandler(serviceRequestQueue, Queue.Queue())
     
-    while True:
-        schedule.run_pending()
-        time.sleep(0.5)
-    scheduler.run()
+    # while True:
+    #     schedule.run_pending()
+    #     time.sleep(0.5)
+    # scheduler.run()
+
+    #scheduler.setUpServiceFunction()
+    scheduler.runExternalService(    {
+        'name' : 'Picture Service',
+        'path' : 'services/scripts/FileService',
+        'language' : 'python3',
+        'entrypoint' : 'pictureService.py',
+        'runnable' : True
+    })
+
+  
