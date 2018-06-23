@@ -10,11 +10,11 @@ try :
 except:
     import queue as Queue
 
-from ServiceHandler import ServiceHandler
+from SubscriptionHandler import SubscriptionHandler
 from ServiceManager import ServiceManager
 
 # if not __name__ == '__main__':
-#     from app.ServiceHandler import ServiceHandler
+#     from app.SubscriptionHandler import SubscriptionHandler
 #     import app.ServiceManager
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class MessageHandler(Thread):
         self.messageResponseQueue = responseQueue
         self.serviceRequestQueue = Queue.Queue()
         self.serviceResponseQueue = Queue.Queue()
-        self.serviceHandler = None
+        self.subscriptionHandler = None
         self.botID = botID
         self.debug = debug
         self.serviceManager = ServiceManager()
@@ -66,21 +66,21 @@ class MessageHandler(Thread):
 
                 elif(self.serviceResponseQueue.qsize() > 0) :
                     response = self.serviceResponseQueue.get()
-                    if(self.debug) : logger.debug("Message response received from ServiceHandler {}".format(str(response)))
+                    if(self.debug) : logger.debug("Message response received from SubscriptionHandler {}".format(str(response)))
                     self.messageResponseQueue.put(response)
             
             except(KeyboardInterrupt, SystemError) :
                 if(self.debug) : logger.debug("\n~~~~~~~~~~~ MessageHandler KeyboardInterrupt Exception Found~~~~~~~~~~~\n")
-                self.ServiceHandler.kill()
+                self.subscriptionHandler.kill()
                 self.running = False
 
 
     def setUpThreads(self) :
-        self.serviceHandler = ServiceHandler(self.serviceRequestQueue, self.serviceResponseQueue, self.debug)
-        self.serviceHandler.setName("ServiceHandler Thread 1")
-        self.serviceHandler.daemon = True
-        self.serviceHandler.start()
-        if(self.debug) : logger.info("Started thread: {}".format("ServiceHandler Thread 1"))
+        self.subscriptionHandler = SubscriptionHandler(self.serviceRequestQueue, self.serviceResponseQueue, self.debug)
+        self.subscriptionHandler.setName("SubscriptionHandler Thread 1")
+        self.subscriptionHandler.daemon = True
+        self.subscriptionHandler.start()
+        if(self.debug) : logger.info("Started thread: {}".format("SubscriptionHandler Thread 1"))
 
     # Parses all raw input from Slack
     def handle(self, rawInput):
@@ -141,17 +141,22 @@ class MessageHandler(Thread):
             # TODO: Improve to handle all types of services
             
             serviceName = self.extractServiceName(message)
-            scheduleAction, scheduleType, frequency, interval = self.determineSchedule(message)
 
-            if(self.debug) : logger.debug("Service Request for serviceName: {} scheduleAction: {}, scheduleType: {}, frequency: {}, interval {}".format(serviceName, scheduleAction, scheduleType, frequency, interval))
+            if(self.serviceManager.isRunnableService(serviceName)) :
+                    
+                scheduleAction, scheduleType, frequency, interval = self.determineSchedule(message)
 
-            if(serviceName is not None) :
-                serviceRequest = self.createServiceRequest(scheduleAction, userID, channel, serviceName, scheduleType, frequency, interval)
-                self.serviceRequestQueue.put(serviceRequest)
-                return ("writeToSlack", "Working on processing Service for message: " + self.stripTag(message) + " ...")
+                if(self.debug) : logger.debug("Service Request for serviceName: {} scheduleAction: {}, scheduleType: {}, frequency: {}, interval {}".format(serviceName, scheduleAction, scheduleType, frequency, interval))
+
+                if(serviceName is not None) :
+                    serviceRequest = self.createServiceRequest(scheduleAction, userID, channel, serviceName, scheduleType, frequency, interval)
+                    self.serviceRequestQueue.put(serviceRequest)
+                    return ("writeToSlack", "Working on processing Service for message: " + self.stripTag(message) + " ...")
+                else :
+                    return ("writeToSlack", "Sorry I wasn't able to find a service for message: " + self.stripTag(message) + " ...")
+
             else :
-                return ("writeToSlack", "Sorry I wasn't able to find a service for message: " + self.stripTag(message) + " ...")
-
+                return ("writeToSlack", "Sorry {} has exprienced an issue contact administrator.".format(serviceName))
         else :
             return ("writeToSlack", "Im not sure how to decipher \"" + self.stripTag(message) + "\".")
 

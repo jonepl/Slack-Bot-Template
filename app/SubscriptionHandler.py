@@ -1,3 +1,9 @@
+'''
+File: SubscriptionHandler.py
+Description: A thread class responsible for handling the users subscriptions to services
+
+'''
+
 from threading import Thread
 
 import os, time, sys, pymongo, subprocess, schedule, logging, json
@@ -15,7 +21,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(levelname)s : %(name)s : %(message)s')
 
-file_handler = logging.FileHandler('logs/ServiceHandler.log')
+file_handler = logging.FileHandler('logs/SubscriptionHandler.log')
 stream_handler = logging.StreamHandler()
 
 file_handler.setFormatter(formatter)
@@ -29,20 +35,23 @@ logger.addHandler(stream_handler)
 
 SERVICE_FUNCTION = {}
 
-class ServiceHandler(Thread) :
+class SubscriptionHandler(Thread) :
 
     def __init__(self, serviceRequestQueue, serviceResponseQueue, debug=False) :
         Thread.__init__(self)
+        # Set up Mongo DB
         client = pymongo.MongoClient( config.slack['mongoDB']['uri'] )
         db = client[ config.slack['mongoDB']['dbName'] ]
         self.collection = db[ config.slack['mongoDB']['collectionName'] ]
+
         self.running = True
         self.debug = debug
         self.serviceRequestQueue = serviceRequestQueue
         self.serviceResponseQueue = serviceResponseQueue
         self.serviceManager = ServiceManager()
         self.serviceFunctions = self.setUpServiceFunctions()
-        if(self.debug) : logger.debug('ServiceHandler successfully created')
+        self.usersSubscriptions = {} # Determine which have access to which services 
+        if(self.debug) : logger.debug('SubscriptionHandler successfully created')
 
     # Entry point for thread
     def run(self) :
@@ -53,9 +62,9 @@ class ServiceHandler(Thread) :
             try:
 
                 schedule.run_pending()
-                self.checkJobQueue() 
+                self.checkJobQueue()
             except(KeyboardInterrupt, SystemError) :
-                print("\n~~~~~~~~~~~ ServiceHandler KeyboardInterrupt Exception Found~~~~~~~~~~~\n")
+                print("\n~~~~~~~~~~~ SubscriptionHandler KeyboardInterrupt Exception Found~~~~~~~~~~~\n")
                 self.running = False
 
     # Checks for updates of jobs
@@ -65,34 +74,47 @@ class ServiceHandler(Thread) :
             
             request = self.serviceRequestQueue.get()
             self.serviceRequestQueue.task_done()
-            
-            if(self.debug) : logger.info("ServiceHandler request found {}".format(request))
+            serviceName = request['scheduleJob']['serviceName']
+
+            if(self.debug) : logger.info("SubscriptionHandler request found {}".format(request))
 
             if(request['scheduleJob']['action'] == 'add') :
 
-                scheduleStatus = self.scheduleJob(request)
+                scheduleSuccessful = self.scheduleJob(request)
                 self.saveJob(request)
 
                 # TODO: Find beter way to confirm that the service was accepted
-                if(scheduleStatus == 0) :
+                if(scheduleSuccessful) :
                     message = request
                     message['messageInfo']['action'] = 'writeToSlack'
                     message['messageInfo']['responseType'] = 'text'
                     message['messageInfo']['response'] = "Successfully scheduled and saved {} service request of type {} every {} {}.".format(message['scheduleJob']['serviceName'], message['scheduleJob']['type'], str(message['scheduleJob']['interval']), message['scheduleJob']['frequency'] )
                     self.serviceResponseQueue.put(message['messageInfo'])
-                
+
+                else :
+                    response = request['messageInfo']
+                    response['action'] = 'writeToFile'
+                    response['responseType'] = 'text'
+                    response['response'] = "Unable to subscribe you to {} because you are already subscribe to this serivce.".format(serviceName)
+                    self.serviceRequestQueue.put(response)
 
             elif(request['scheduleJob']['action'] == 'remove') :
 
-                scheduleStatus = self.unscheduleJob(request)
+                scheduleSuccessful = self.unscheduleJob(request)
                 self.deleteJob(request)
 
-                if(scheduleStatus == 0) :
+                if(scheduleSuccessful) :
                     message = request
                     message['messageInfo']['action'] = 'writeToSlack'
                     message['messageInfo']['responseType'] = 'text'
                     message['messageInfo']['response'] = "Successfully unscheduled and removed {} service request of type {} every {} {}.".format(message['scheduleJob']['serviceName'], message['scheduleJob']['type'], str(message['scheduleJob']['interval']), message['scheduleJob']['frequency'] )
                     self.serviceResponseQueue.put(message['messageInfo'])
+                else :
+                    response = request['messageInfo']
+                    response['action'] = 'writeToFile'
+                    response['responseType'] = 'text'
+                    response['response'] = "Unable to unsubscribe you from {} because you are no longer subscribe to this serivce.".format(serviceName)
+                    self.serviceRequestQueue.put(response)
             
             elif(request['scheduleJob']['action'] == 'update') :
                 pass
@@ -105,53 +127,66 @@ class ServiceHandler(Thread) :
     # Adds to reoccuring job to DB
     def saveJob(self, request):
         #FIXME: Use Mongo Schema to prevent ulgy jobs entrying db
-        request['scheduleJob']['serviceTag'] = self.produceTag(request)
-        result = self.collection.insert(request)
-        print(result)
+        userId = request['messageInfo']['userId']
+        service = request['scheduleJob']['serviceName']
+
+        # tag = self.produceTag(userId, service)
+        tag = self.produceTag(request)
+
+        if(not self.subscriptionExists(tag)) :
+            request['scheduleJob']['serviceTag'] = tag
+            result = self.collection.insert(request)
+        else :
+            result = None
+
         return result
     
     # Removes reoccuring job to DB
     def deleteJob(self, request) :
+
         tag = self.produceTag(request)
-        query = { "scheduleJob.serviceTag" : tag }
-        result = self.collection.remove(query)
-        print(result)
+
+        if(self.subscriptionExists(tag)) :
+
+            query = { "scheduleJob.serviceTag" : tag }
+            result = self.collection.remove(query)
+        else :
+            print("Unable to removed tag because it does not exist")
+            result = None
+        #print(result)
         return result
 
-    # Produces an job identifier
-    def produceTag(self, request) :
-        return request['messageInfo']['slackUserId'] + "_" + request['scheduleJob']['serviceName']
-
-    # Loads all jobs from DB into scheduler
-    def loadScheduledJobs(self):
-
-        jobs = self.collection.find( {} )
-
-        for job in jobs :
-            self.scheduleJob(job)
-    
     # Adds a job to Scheduler
     def scheduleJob(self, request) :
+
+        status = True      
+        tag = self.extractTag(request)
+        serviceName = request['scheduleJob']['serviceName']
+
+        if( not self.subscriptionExists(tag) ) :
+              
+            if(self.debug) : logger.debug("Scheduling Job ...\n{}".format(request))
+
+            if(self.isIntraDay(request)) :
+                status = self.scheduleIntraDayJob(request)
+                
+            elif(self.isIntraMonth(request)) :
+                status = self.scheduleIntraMonthJob(request)
+
+            elif(self.isIntraYear(request)) :
+                pass
+                # Not Implemented
+                # status = self.scheduleIntraYearJob(request)
+
+            else :
+                if(self.debug) : logger.error("Unable to schedule Job")
+                status = False
         
-        status = 0
-
-        if(self.debug) : logger.debug("Scheduling Job ...")
-
-        if(self.isIntraDay(request)) :
-            self.scheduleIntraDayJob(request)
-
-        elif(self.isIntraMonth(request)) :
-            self.scheduleIntraMonthJob(request)
-
-        elif(self.isIntraYear(request)) :
-            pass
-            # Not Implemented
-            #self.scheduleIntraYearJob(request)
+            if(status) : self.addUserToSubscription(tag)
 
         else :
-            if(self.debug) : logger.error("Unable to schedule Job")
-            status = -1
-
+            print("You are already Subscribe to {} service".format(serviceName))
+            status = False
         return status
 
     # Removes schedule jobs from schedule
@@ -165,10 +200,26 @@ class ServiceHandler(Thread) :
         schedule.clear(tag)
 
         return status
+    
+    def unscheduledJobByTag(self, userIds, service) :
+
+        for userId in userIds :
+            tag = userId + "_" + service
+            schedule.clear(tag)
         
+    # Loads all jobs from DB into scheduler
+    def loadScheduledJobs(self):
+
+        jobs = self.collection.find( {} )
+
+        for job in jobs :
+            self.loadSubscriptions(self.extractTag(job))
+            self.scheduleJob(job)
+
     # Helper method: Adds a new intra-day schedule job
     def scheduleIntraDayJob(self, request) :
         
+        status = True
         serviceName = request['scheduleJob']['serviceName']
         func = self.serviceFunctions[serviceName]
         frequency = request['scheduleJob']['frequency']
@@ -176,8 +227,9 @@ class ServiceHandler(Thread) :
 
         args = {}
 
-        args['runnerInfo'] = self.serviceManager.getServiceDetails(serviceName)
+        args['service'] = self.serviceManager.getServiceDetails(serviceName)
         args['messageInfo'] = request['messageInfo']
+        args['scheduleJob'] = request['messageInfor']
 
         # NOTE: When would args be None?
         if( args is not None ) :
@@ -195,8 +247,20 @@ class ServiceHandler(Thread) :
 
             else :
                 print("ERROR OCCURRED")
+                status = False
         else :
             print("Error Occurred while searching for ServiceDetails")
+            status = False
+
+        return status
+
+    # Helper method: Adds a new intra month schedule job
+    def scheduleIntraMonthJob(self, job) :
+        pass
+
+    # Helper method: Adds a new intra year schedule job
+    def scheduleIntraYearJob(self, job) :
+        pass
 
     def setUpServiceFunctions(self) :
         
@@ -221,38 +285,103 @@ class ServiceHandler(Thread) :
 
         return serviceFunc
 
-    def runExternalService(self, args) :
-        cmd = args['runnerInfo']['language']
-        filepath = args['runnerInfo']['path'] + "/"+ args['runnerInfo']['entrypoint']
-        
-        output = subprocess.check_output([cmd, filepath])
-        response = self.serviceManager.generateSlackResponse(output, args['messageInfo'])
-        
-        if(not response == False) :
-            if(self.debug) : logger.info("Returning response up to MessageHandler: {}".format(response))
-            self.serviceResponseQueue.put(response)
-        else :
-            print("~~~~~~~~~~~~~ Error occurred Generating Response~~~~~~~~~~~~~~~")
-
-    # Helper method: Adds a new intra month schedule job
-    def scheduleIntraMonthJob(self, job) :
-        pass
-
-    # Helper method: Adds a new intra year schedule job
-    def scheduleIntraYearJob(self, job) :
-        pass
-
-    # NOTE: Probably can simple this method and the one below
-    def isValidMethod(self, methodName) :
-        return callable(getattr(self, methodName))
-
     # Possibly can be moved into ServiceManager
     def getFunc(self, methodName) :
         return getattr(self, methodName)
 
+    def subscriptionExists(self, tag) :
+
+        userId, service = tag.split("_")
+
+        if(userId in self.usersSubscriptions) : 
+            if(service in self.usersSubscriptions[userId]) :
+                return True
+        else : return False
+
+    def addUserToSubscription(self, tag) :
+
+        userId, service = tag.split("_")
+        
+        if(userId in self.usersSubscriptions) :
+            if( not (service in self.usersSubscriptions[userId]) ) :
+                self.usersSubscriptions[userId].append(service)
+        else :
+            self.usersSubscriptions[userId] = [service]
+
+    def removeUserFromSubscription(self, tag) :
+
+        userId, service = tag.split("_")
+
+        if(userId in self.usersSubscriptions) :
+            
+            if(service in self.usersSubscriptions[userId]) :
+                self.usersSubscriptions[userId].remove(service)
+            else :
+                print("Tag {} does not exits. Can't remove".format(tag))
+
+            if(not self.usersSubscriptions[userId]) :
+                del self.usersSubscriptions[userId]
+        else :
+            print("No userId {} exists".format(userId))
+
+    def loadSubscriptions(self, tag) :
+        
+        userId, service = tag.split("_")
+        
+        if(userId in self.usersSubscriptions) :
+            if( not (service in self.usersSubscriptions[userId]) ) :
+                self.usersSubscriptions[userId].append(service)
+        else :
+            self.usersSubscriptions[userId] = [service]
+
+    def getUserIdsForServiceName(self, serviceName) :
+        
+        result = []
+
+        for userId, serviceNames in enumerate(self.usersSubscriptions) :
+            if(serviceName in serviceNames) :
+                result.append(userId)
+
+        return result
+            
+    def getServicesListForUsersId(self, userId) :
+        if(userId in self.usersSubscriptions) :
+            return self.usersSubscriptions[userId]
+
+    def runExternalService(self, args) :
+
+        cmd = args['service']['language']
+        filepath = args['service']['path'] + "/"+ args['service']['entrypoint']
+        serviceName = args['scheduleJob'['serviceName']]
+        
+        output = subprocess.check_output([cmd, filepath])
+        response = self.serviceManager.generateSlackResponse(output, args['messageInfo'])
+        
+        if(response is not None) :
+            if(self.debug) : logger.info("Returning response up to MessageHandler: {}".format(response))
+            self.serviceResponseQueue.put(response)
+        else :
+            print("The external service {} fail. Disable this service".format(serviceName))
+            self.serviceManager.makeUnrunnableService(serviceName)
+            userIds = self.getUserIdsForServiceName(serviceName)
+            self.unscheduledJobByTag(userIds, serviceName)
+
+            #self.removeUserFromSubscription()
+            
+    # NOTE: Probably can simple this method and the one below
+    def isValidMethod(self, methodName) :
+        return callable(getattr(self, methodName))
+
     # Terminates thread loop
     def kill(self) :
         self.running = False
+
+    # Produces an job identifier
+    def produceTag(self, request) :
+        return request['messageInfo']['slackUserId'] + "_" + request['scheduleJob']['serviceName']
+
+    def extractTag(self, job) :
+        return  job['scheduleJob']['serviceTag']
 
     # Determine if job is an intra day
     def isIntraDay(self, request) :
@@ -306,7 +435,7 @@ if __name__ == '__main__':
         }
     serviceRequestQueue = Queue.Queue()
     serviceRequestQueue.put(request)
-    scheduler = ServiceHandler(serviceRequestQueue, Queue.Queue())
+    scheduler = SubscriptionHandler(serviceRequestQueue, Queue.Queue())
     
     # while True:
     #     schedule.run_pending()

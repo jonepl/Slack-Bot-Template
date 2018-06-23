@@ -22,12 +22,10 @@ messageInfo = None
 # TODO: Figure out how to decouple config file state from this test
 def setup_module(module) :
 
-    global serviceManager
-    global serviceConfig
     global messageInfo
+    global serviceConfig
+    global serviceManager
 
-    serviceManager = ServiceManager.ServiceManager()
-    serviceConfig = sConfig.services
     messageInfo = {
         "channel": "ABC123ZYX262524",
         "slackUserId": "BDF246ACE135",
@@ -36,6 +34,29 @@ def setup_module(module) :
         "response": None,
         "serviceInfo" : {}
     }
+
+    serviceConfig = [
+        {
+            'name' : 'Intro Service', 
+            'path' : 'services/scripts/textService',
+            'language' : 'python',
+            'entrypoint' : 'helloWorldService.py'
+        },
+        {
+            'name' : 'Picture Service',
+            'path' : 'services/scripts/FileService',
+            'language' : 'python',
+            'entrypoint' : 'pictureService.py'
+        },
+        {
+            'name' : 'Internal Service',
+            'path' : "Internal",
+            'language' : 'python',
+            'entrypoint' : 'helloJob'
+        }
+    ]
+
+    serviceManager = ServiceManager.ServiceManager(serviceConfig)
 
 def test_getAllServices() :
     
@@ -47,6 +68,46 @@ def test_getServiceNames() :
     expected = prepServiceNames(serviceConfig)
     result = serviceManager.getServicesNames()
     assert(result == expected)
+
+def test_setRunnableServices() :
+    
+    expected = { 
+        'Intro Service' : True, 
+        'Picture Service' : True, 
+        'Internal Service' : True 
+    }
+    serviceNames = serviceManager.getServicesNames()
+    ServiceManager._initRunnableServices(serviceNames)
+
+    assert(serviceManager.runnableServices == expected)
+
+def test_makeUnrunnableService_Happy1() :
+
+    expected = { 
+        'Intro Service' : True, 
+        'Picture Service' : False, 
+        'Internal Service' : True 
+    }
+    
+    serviceNames = serviceManager.getServicesNames()
+    ServiceManager._initRunnableServices(serviceNames)
+    serviceManager.makeUnrunnableService('Picture Service')
+
+    assert(serviceManager.runnableServices == expected)
+
+def test_makeUnrunnableService_Happy2() :
+
+    expected = { 
+        'Intro Service' : True, 
+        'Picture Service' : False, 
+        'Internal Service' : True 
+    }
+
+    serviceNames = serviceManager.getServicesNames()
+    ServiceManager._initRunnableServices(serviceNames)
+    serviceManager.makeUnrunnableService('Wrong Service')
+
+    assert(serviceManager.runnableServices == expected)
 
 def test_validateConfig_Happy():
     
@@ -70,7 +131,6 @@ def test_validateConfig_Sad(capfd) :
     ]
     with pytest.raises(SystemExit) as pytest_wrapped_e:
         serviceManager.validateConfig(config)
-
 
 def test_getServiceDetails_Happy() :
 
@@ -116,6 +176,35 @@ def test_getServiceLanguage_Happy() :
     result = serviceManager.getServiceLanguage(serviceName)
 
     assert(result == expected)
+
+def test_isRunnableService_Happy() :
+
+    expected = True
+    serviceName = serviceConfig[0]['name']
+    
+    result = serviceManager.isRunnableService(serviceName)
+
+    assert(expected == result)
+
+def test_makeUnrunnableService() :
+
+    serviceName = serviceConfig[0]['name']
+    expected = False
+
+    serviceManager.makeUnrunnableService(serviceName)
+    result = serviceManager.isRunnableService(serviceName)
+
+    assert(expected == result)
+    
+def test_makeRunnableService() :
+
+    serviceName = serviceConfig[0]['name']
+    expected = True
+
+    serviceManager.makeRunnableService(serviceName)
+    result = serviceManager.isRunnableService(serviceName)
+
+    assert(expected == result)
 
 def test_getServiceLanguage_Sad() :
     serviceName = 'Some None Existing Service'
@@ -191,7 +280,7 @@ def test_generateSlackResponse_Sad1() :
 
 def test_generateSlackResponse_Sad2() :
 
-    expected = { }
+    expected = None
     jsonString = '{ "responseType" : "dumbResponseType", "contents" : "the cow jumped over the moon" }'
     byteString = jsonString.encode('utf-8')
 

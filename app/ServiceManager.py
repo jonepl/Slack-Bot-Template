@@ -19,11 +19,14 @@ class ServiceManager(object) :
     _instance = None
 
     def __new__(self, services=sConfig.services) :
+        print(services)
         if (not self._instance) :
 
             self._instance = super(ServiceManager, self).__new__(self)
             self.services = services
             self.serviceNames = self.getServicesNames(self)
+            self.runnableServices = _initRunnableServices(self.serviceNames)
+            
         return self._instance
 
     def getAllServices(self):
@@ -35,21 +38,37 @@ class ServiceManager(object) :
             serviceNames.append(services['name'])
         return serviceNames
 
+    def isRunnableService(self, serviceName) :
+
+        if (serviceName in self.serviceNames) :
+            return self.runnableServices[serviceName]
+        return False
+
+    def makeUnrunnableService(self, serviceName) :
+
+        if(serviceName in self.runnableServices) :
+            self.runnableServices[serviceName] = False
+
+    def makeRunnableService(self, serviceName) :
+
+        if(serviceName in self.runnableServices) :
+            self.runnableServices[serviceName] = True
+
     def validateConfig(self, configServices=None) :
 
         services = configServices if configServices != None else self.services
         
         for service in services :
-                try:
-                    _isValidName(service["name"])
-                    _isValidPath(service["path"])
-                    _isValidLanguage(service["language"])
-                    _isValidEntrypoint(service["path"], service["entrypoint"])
-                    _hasDuplicatedName(self.serviceNames)
-                    _validateCommands(service)
-                except Exception as e:
-                    print("Exception: {} for service: {}".format(e, service))
-                    sys.exit(1)
+            try:
+                _isValidName(service["name"])
+                _isValidPath(service["path"])
+                _isValidLanguage(service["language"])
+                _isValidEntrypoint(service["path"], service["entrypoint"])
+                _hasDuplicatedName(self.serviceNames)
+                _validateCommands(service)
+            except Exception as e:
+                print("Exception: {} for service: {}".format(e, service))
+                sys.exit(1)
 
     def getServiceDetails(self, serviceName) :
         for service in self.services :
@@ -142,7 +161,7 @@ class ServiceManager(object) :
             
             else :
                 print("Invalid responseType")
-                return { }
+                return None
 
             response['response'] = outputJson['contents']
 
@@ -150,8 +169,29 @@ class ServiceManager(object) :
 
         else :
             print("Invalid responseType")
-            return response
-        
+            return response  
+
+    # def updateConfig(self, services) :
+    #     for service in services :
+    #         try:
+    #             _isValidName(service["name"])
+    #             _isValidPath(service["path"])
+    #             _isValidLanguage(service["language"])
+    #             _isValidEntrypoint(service["path"], service["entrypoint"])
+    #             _hasDuplicatedName(self.serviceNames)
+    #             _validateCommands(service)
+    #         except Exception as e:
+    #             print("Exception: {} for service: {}".format(e, service))
+    #             sys.exit(1)
+
+def _initRunnableServices(serviceNames) :
+
+    runnableServices = {}
+
+    for serviceName in serviceNames :
+        runnableServices[serviceName] = True
+    
+    return runnableServices
 
 def _isValidName(name) :
     if(not name) :
@@ -208,10 +248,6 @@ def _checkFileInfo(service) :
                 service['dateModified'] = modified
     else :
         raise Exception('Error in services.fileInfo. Set')
-
-
-        
-
 
 def main():
     # ServiceManager.validateConfig()
