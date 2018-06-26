@@ -59,7 +59,6 @@ def test_unscheduleJob() :
 def test_setUpServiceFunction() :
     pass
 
-
 def test_produceTag():
 
     expectedTag = request['messageInfo']['slackUserId'] + "_" + request['scheduleJob']['serviceName']
@@ -176,11 +175,16 @@ def test_removeUserFromSubscription_Sad() :
     pass
 
 def test_getUserIdsForServiceName() :
-    pass
+    
+    userId = '1UFJD2D'
+    expected = ['Intro Service', 'Another Service']
 
+    result = subscriptionHandler.getServicesListForUsersId(userId)
+
+    assert(expected == result)
+    
 def getServicesListForUsersId() :
     pass
-
 
 # def test_unsceduleJob() :
 

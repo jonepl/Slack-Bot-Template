@@ -50,7 +50,7 @@ class SubscriptionHandler(Thread) :
         self.serviceResponseQueue = serviceResponseQueue
         self.serviceManager = ServiceManager()
         self.serviceFunctions = self.setUpServiceFunctions()
-        self.usersSubscriptions = {} # Determine which have access to which services 
+        self.usersSubscriptions = {} # Determine which users have access to which services 
         if(self.debug) : logger.debug('SubscriptionHandler successfully created')
 
     # Entry point for thread
@@ -74,47 +74,60 @@ class SubscriptionHandler(Thread) :
             
             request = self.serviceRequestQueue.get()
             self.serviceRequestQueue.task_done()
+
             serviceName = request['scheduleJob']['serviceName']
+            tag = self.produceTag(request)
 
             if(self.debug) : logger.info("SubscriptionHandler request found {}".format(request))
 
             if(request['scheduleJob']['action'] == 'add') :
 
                 scheduleSuccessful = self.scheduleJob(request)
-                self.saveJob(request)
+                dbSaveSuccessful = self.saveJob(request)
 
-                # TODO: Find beter way to confirm that the service was accepted
-                if(scheduleSuccessful) :
-                    message = request
-                    message['messageInfo']['action'] = 'writeToSlack'
-                    message['messageInfo']['responseType'] = 'text'
-                    message['messageInfo']['response'] = "Successfully scheduled and saved {} service request of type {} every {} {}.".format(message['scheduleJob']['serviceName'], message['scheduleJob']['type'], str(message['scheduleJob']['interval']), message['scheduleJob']['frequency'] )
-                    self.serviceResponseQueue.put(message['messageInfo'])
+                if(scheduleSuccessful and dbSaveSuccessful) :
+
+                    self.addUserToSubscription(tag)
+
+                    response = "Successfully scheduled and saved {} service request of type {} every {} {}.".format(serviceName, request['scheduleJob']['type'], str(request['scheduleJob']['interval']), request['scheduleJob']['frequency'] )
+                    slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
+                                        request['messageInfo']['channel'], 
+                                        response)
+
+                    self.serviceResponseQueue.put(slackResponse)
 
                 else :
-                    response = request['messageInfo']
-                    response['action'] = 'writeToFile'
-                    response['responseType'] = 'text'
-                    response['response'] = "Unable to subscribe you to {} because you are already subscribe to this serivce.".format(serviceName)
-                    self.serviceRequestQueue.put(response)
+                    
+                    response = "Unable to subscribe you to {} because you are already subscribe to this serivce.".format(serviceName)
+
+                    slackResponse = self.generateSlackResponse( request['messageInfo']['slackUserId'], 
+                                        request['messageInfo']['channel'],
+                                        response)
+
+                    self.serviceResponseQueue.put(slackResponse)
 
             elif(request['scheduleJob']['action'] == 'remove') :
 
-                scheduleSuccessful = self.unscheduleJob(request)
-                self.deleteJob(request)
+                unscheduleSuccessful = self.unscheduleJob(request)
+                dbRemoveSuccessful = self.deleteJob(request)
 
-                if(scheduleSuccessful) :
-                    message = request
-                    message['messageInfo']['action'] = 'writeToSlack'
-                    message['messageInfo']['responseType'] = 'text'
-                    message['messageInfo']['response'] = "Successfully unscheduled and removed {} service request of type {} every {} {}.".format(message['scheduleJob']['serviceName'], message['scheduleJob']['type'], str(message['scheduleJob']['interval']), message['scheduleJob']['frequency'] )
-                    self.serviceResponseQueue.put(message['messageInfo'])
+                if(unscheduleSuccessful and dbRemoveSuccessful) :
+                    
+                    response = "Successfully unscheduled and removed {} service request of type {} every {} {}.".format(request['scheduleJob']['serviceName'], request['scheduleJob']['type'], str(request['scheduleJob']['interval']), request['scheduleJob']['frequency'] )
+                    slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
+                                        request['messageInfo']['channel'], 
+                                        response)
+
+                    self.serviceResponseQueue.put(slackResponse)
                 else :
-                    response = request['messageInfo']
-                    response['action'] = 'writeToFile'
-                    response['responseType'] = 'text'
-                    response['response'] = "Unable to unsubscribe you from {} because you are no longer subscribe to this serivce.".format(serviceName)
-                    self.serviceRequestQueue.put(response)
+                    # FIXME: Make a method for creatinga messageInfo response object
+
+                    response = "Unable to unsubscribe you from {} because you are no longer subscribe to this serivce.".format(serviceName)
+                    slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
+                                        request['messageInfo']['channel'], 
+                                        response)
+
+                    self.serviceResponseQueue.put(slackResponse)
             
             elif(request['scheduleJob']['action'] == 'update') :
                 pass
@@ -127,7 +140,7 @@ class SubscriptionHandler(Thread) :
     # Adds to reoccuring job to DB
     def saveJob(self, request):
         #FIXME: Use Mongo Schema to prevent ulgy jobs entrying db
-        userId = request['messageInfo']['userId']
+        userId = request['messageInfo']['slackUserId']
         service = request['scheduleJob']['serviceName']
 
         # tag = self.produceTag(userId, service)
@@ -137,30 +150,34 @@ class SubscriptionHandler(Thread) :
             request['scheduleJob']['serviceTag'] = tag
             result = self.collection.insert(request)
         else :
-            result = None
+            print("User id {} is already subscribed to service {}".format(userId, service))
 
+            result = False
+        # FIXME: Return boolean status only
         return result
     
     # Removes reoccuring job to DB
     def deleteJob(self, request) :
 
+        result = True
         tag = self.produceTag(request)
 
         if(self.subscriptionExists(tag)) :
 
             query = { "scheduleJob.serviceTag" : tag }
-            result = self.collection.remove(query)
+            dbStat = self.collection.remove(query)
+            if(dbStat['n'] <= 0) : result = False
         else :
             print("Unable to removed tag because it does not exist")
-            result = None
-        #print(result)
+            result = False
+    
         return result
 
     # Adds a job to Scheduler
     def scheduleJob(self, request) :
 
         status = True      
-        tag = self.extractTag(request)
+        tag = self.produceTag(request)
         serviceName = request['scheduleJob']['serviceName']
 
         if( not self.subscriptionExists(tag) ) :
@@ -181,8 +198,6 @@ class SubscriptionHandler(Thread) :
             else :
                 if(self.debug) : logger.error("Unable to schedule Job")
                 status = False
-        
-            if(status) : self.addUserToSubscription(tag)
 
         else :
             print("You are already Subscribe to {} service".format(serviceName))
@@ -192,19 +207,23 @@ class SubscriptionHandler(Thread) :
     # Removes schedule jobs from schedule
     def unscheduleJob(self, job) :
 
-        status = 0
+        status = True
 
         if(self.debug) : logger.debug("Unscheduling Job ...")
 
         tag = job['messageInfo']['slackUserId'] + "_" + job['scheduleJob']['serviceName']
+        
+        # : Figure out if a status can be evaluated
         schedule.clear(tag)
 
         return status
     
+    # Unschedules a list of users from scheduler
     def unscheduledJobByTag(self, userIds, service) :
 
         for userId in userIds :
             tag = userId + "_" + service
+            # FIXME: Status of removal?
             schedule.clear(tag)
         
     # Loads all jobs from DB into scheduler
@@ -229,7 +248,7 @@ class SubscriptionHandler(Thread) :
 
         args['service'] = self.serviceManager.getServiceDetails(serviceName)
         args['messageInfo'] = request['messageInfo']
-        args['scheduleJob'] = request['messageInfor']
+        args['scheduleJob'] = request['scheduleJob']
 
         # NOTE: When would args be None?
         if( args is not None ) :
@@ -352,7 +371,8 @@ class SubscriptionHandler(Thread) :
 
         cmd = args['service']['language']
         filepath = args['service']['path'] + "/"+ args['service']['entrypoint']
-        serviceName = args['scheduleJob'['serviceName']]
+
+        serviceName = args['scheduleJob']['serviceName']
         
         output = subprocess.check_output([cmd, filepath])
         response = self.serviceManager.generateSlackResponse(output, args['messageInfo'])
@@ -380,6 +400,7 @@ class SubscriptionHandler(Thread) :
     def produceTag(self, request) :
         return request['messageInfo']['slackUserId'] + "_" + request['scheduleJob']['serviceName']
 
+    #FIXME: Redundant method
     def extractTag(self, job) :
         return  job['scheduleJob']['serviceTag']
 
@@ -400,9 +421,10 @@ class SubscriptionHandler(Thread) :
 
     # Text based job
     def helloJob(self, messageInfo) :
-        messageInfo['action'] = 'writeToSlack'
-        messageInfo['responseType'] = 'text'
-        messageInfo['response'] = 'Hello World Fool!'
+        response = 'Hello World Fool!'
+        
+        self.generateSlackResponse(messageInfo['slackUserId'],
+        messageInfo['channel'], response)
 
         self.serviceResponseQueue.put(messageInfo)  
 
@@ -414,6 +436,18 @@ class SubscriptionHandler(Thread) :
         messageInfo['response'] = './extras/images/slackdroid.png'
 
         self.serviceResponseQueue.put(messageInfo)  
+
+    def generateSlackResponse(self, slackUserId, channel, response) :
+        messageInfo = {}
+
+        messageInfo['action'] = "writeToSlack"
+        messageInfo['responseType'] = "text"
+        messageInfo['slackUserId'] = slackUserId
+        messageInfo['channel'] = channel
+        messageInfo['response'] = response
+
+        return messageInfo
+    
 
 if __name__ == '__main__':
     request = {
@@ -449,6 +483,4 @@ if __name__ == '__main__':
         'language' : 'python3',
         'entrypoint' : 'pictureService.py',
         'runnable' : True
-    })
-
-  
+    }) 
