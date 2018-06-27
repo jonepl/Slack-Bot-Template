@@ -120,7 +120,6 @@ class SubscriptionHandler(Thread) :
 
                     self.serviceResponseQueue.put(slackResponse)
                 else :
-                    # FIXME: Make a method for creatinga messageInfo response object
 
                     response = "Unable to unsubscribe you from {} because you are no longer subscribe to this serivce.".format(serviceName)
                     slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
@@ -153,7 +152,7 @@ class SubscriptionHandler(Thread) :
             print("User id {} is already subscribed to service {}".format(userId, service))
 
             result = False
-        # FIXME: Return boolean status only
+
         return result
     
     # Removes reoccuring job to DB
@@ -225,7 +224,7 @@ class SubscriptionHandler(Thread) :
             tag = userId + "_" + service
             # FIXME: Status of removal?
             schedule.clear(tag)
-        
+
     # Loads all jobs from DB into scheduler
     def loadScheduledJobs(self):
 
@@ -234,6 +233,17 @@ class SubscriptionHandler(Thread) :
         for job in jobs :
             self.loadSubscriptions(self.extractTag(job))
             self.scheduleJob(job)
+    
+    # loads a tag into local subscription record
+    def loadSubscriptions(self, tag) :
+
+        userId, service = tag.split("_")
+
+        if(userId in self.usersSubscriptions) :
+            if( not (service in self.usersSubscriptions[userId]) ) :
+                self.usersSubscriptions[userId].append(service)
+        else :
+            self.usersSubscriptions[userId] = [service]
 
     # Helper method: Adds a new intra-day schedule job
     def scheduleIntraDayJob(self, request) :
@@ -281,11 +291,12 @@ class SubscriptionHandler(Thread) :
     def scheduleIntraYearJob(self, job) :
         pass
 
+    # Assigns a runnable function to each of the services in the service config
     def setUpServiceFunctions(self) :
         
         serviceFunc = {}
 
-        services = self.serviceManager.getAllServices()
+        services = self.serviceManager.getAllServicesDetails()
         
         for service in services :
             serviceName = service['name']
@@ -293,8 +304,8 @@ class SubscriptionHandler(Thread) :
 
             if(location.lower() == "internal") :
                 methodName = service['entrypoint']
-                if(self.isValidMethod(methodName)) :
-                    function = self.getFunc(methodName)
+                function = self.getFunction(methodName)
+                if(function not None) :
                     serviceFunc[serviceName] = function
             else :
 
@@ -304,10 +315,14 @@ class SubscriptionHandler(Thread) :
 
         return serviceFunc
 
-    # Possibly can be moved into ServiceManager
-    def getFunc(self, methodName) :
-        return getattr(self, methodName)
+    # Returns a function for a give serviceName
+    def getFunction(self, methodName) :
+        if(callable(getattr(self, methodName))) :
+            return getattr(self, methodName)
+        else :
+            return None
 
+    # Determines if there is a user subscription that exists for a given tag
     def subscriptionExists(self, tag) :
 
         userId, service = tag.split("_")
@@ -317,6 +332,7 @@ class SubscriptionHandler(Thread) :
                 return True
         else : return False
 
+    # Adds a user to the local user subscription list
     def addUserToSubscription(self, tag) :
 
         userId, service = tag.split("_")
@@ -327,6 +343,7 @@ class SubscriptionHandler(Thread) :
         else :
             self.usersSubscriptions[userId] = [service]
 
+    # Removes a user to the local user subscription list
     def removeUserFromSubscription(self, tag) :
 
         userId, service = tag.split("_")
@@ -342,16 +359,6 @@ class SubscriptionHandler(Thread) :
                 del self.usersSubscriptions[userId]
         else :
             print("No userId {} exists".format(userId))
-
-    def loadSubscriptions(self, tag) :
-        
-        userId, service = tag.split("_")
-        
-        if(userId in self.usersSubscriptions) :
-            if( not (service in self.usersSubscriptions[userId]) ) :
-                self.usersSubscriptions[userId].append(service)
-        else :
-            self.usersSubscriptions[userId] = [service]
 
     def getUserIdsForServiceName(self, serviceName) :
         
@@ -375,7 +382,7 @@ class SubscriptionHandler(Thread) :
         serviceName = args['scheduleJob']['serviceName']
         
         output = subprocess.check_output([cmd, filepath])
-        response = self.serviceManager.generateSlackResponse(output, args['messageInfo'])
+        response = self.serviceManager.generateSlackResponseOutput(output, args['messageInfo'])
         
         if(response is not None) :
             if(self.debug) : logger.info("Returning response up to MessageHandler: {}".format(response))
@@ -388,9 +395,7 @@ class SubscriptionHandler(Thread) :
 
             #self.removeUserFromSubscription()
             
-    # NOTE: Probably can simple this method and the one below
-    def isValidMethod(self, methodName) :
-        return callable(getattr(self, methodName))
+
 
     # Terminates thread loop
     def kill(self) :
@@ -422,7 +427,7 @@ class SubscriptionHandler(Thread) :
     # Text based job
     def helloJob(self, messageInfo) :
         response = 'Hello World Fool!'
-        
+
         self.generateSlackResponse(messageInfo['slackUserId'],
         messageInfo['channel'], response)
 

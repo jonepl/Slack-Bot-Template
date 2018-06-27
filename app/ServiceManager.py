@@ -1,7 +1,7 @@
 '''
 File: ServiceManager
-Description: A Singleton Class that handles services state, 
-             validates services config list and service output
+Description: A Singleton Class that handles services state, validates services
+             config list and service output
 
 '''
 
@@ -29,31 +29,37 @@ class ServiceManager(object) :
             
         return self._instance
 
-    def getAllServices(self):
+    # Gets Service Details for all service in config
+    def getAllServicesDetails(self):
         return self.services
 
+    # Gets Service Names for Service
     def getServicesNames(self) :
         serviceNames = []
         for services in self.services :
             serviceNames.append(services['name'])
         return serviceNames
 
+    # Determines if a service is runnable
     def isRunnableService(self, serviceName) :
 
         if (serviceName in self.serviceNames) :
             return self.runnableServices[serviceName]
         return False
 
+    # Set a service status status to not runnable
     def makeUnrunnableService(self, serviceName) :
 
         if(serviceName in self.runnableServices) :
             self.runnableServices[serviceName] = False
 
+    # Set a service status status to runnable
     def makeRunnableService(self, serviceName) :
 
         if(serviceName in self.runnableServices) :
             self.runnableServices[serviceName] = True
 
+    # Validate configuration file
     def validateConfig(self, configServices=None) :
 
         services = configServices if configServices != None else self.services
@@ -70,6 +76,7 @@ class ServiceManager(object) :
                 print("Exception: {} for service: {}".format(e, service))
                 sys.exit(1)
 
+    # Gets the details for a single service by name
     def getServiceDetails(self, serviceName) :
         for service in self.services :
             if(service['name'] ==  serviceName) :
@@ -125,7 +132,7 @@ class ServiceManager(object) :
         
         return valid
 
-    def generateSlackResponse(self, output, messageInfo) :
+    def generateSlackResponseOutput(self, output, messageInfo) :
         
         response = {}
         outputJson = json.loads(output.decode('utf-8'))
