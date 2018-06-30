@@ -97,7 +97,7 @@ class SubscriptionHandler(Thread) :
                     self.serviceResponseQueue.put(slackResponse)
 
                 else :
-                    
+                    print(request)
                     response = "Unable to subscribe you to {} because you are already subscribe to this serivce.".format(serviceName)
 
                     slackResponse = self.generateSlackResponse( request['messageInfo']['slackUserId'], 
@@ -115,8 +115,8 @@ class SubscriptionHandler(Thread) :
                     
                     response = "Successfully unscheduled and removed {} service request of type {} every {} {}.".format(request['scheduleJob']['serviceName'], request['scheduleJob']['type'], str(request['scheduleJob']['interval']), request['scheduleJob']['frequency'] )
                     slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
-                                        request['messageInfo']['channel'], 
-                                        response)
+                                                               request['messageInfo']['channel'], 
+                                                               response)
 
                     self.serviceResponseQueue.put(slackResponse)
                 else :
@@ -147,7 +147,8 @@ class SubscriptionHandler(Thread) :
 
         if(not self.subscriptionExists(tag)) :
             request['scheduleJob']['serviceTag'] = tag
-            result = self.collection.insert(request)
+            dbResult = self.collection.insert_one(request)
+            result = dbResult.acknowledged
         else :
             print("User id {} is already subscribed to service {}".format(userId, service))
 
@@ -158,19 +159,23 @@ class SubscriptionHandler(Thread) :
     # Removes reoccuring job to DB
     def deleteJob(self, request) :
 
-        result = True
         tag = self.produceTag(request)
 
         if(self.subscriptionExists(tag)) :
 
             query = { "scheduleJob.serviceTag" : tag }
             dbStat = self.collection.remove(query)
-            if(dbStat['n'] <= 0) : result = False
+            
+            if(dbStat.nRemoved <= 0) : 
+                print("ERROR removing document with tag {}.")
+                return False
+                
+            else :
+                print("Mongdo DB document for tag {} has been properly removed.")
+                return True
         else :
             print("Unable to removed tag because it does not exist")
-            result = False
-    
-        return result
+            return False
 
     # Adds a job to Scheduler
     def scheduleJob(self, request) :
@@ -229,9 +234,9 @@ class SubscriptionHandler(Thread) :
     def loadScheduledJobs(self):
 
         jobs = self.collection.find( {} )
-
+        if(self.debug) : logger.debug("Found {} logs in db".format(str(jobs)))
         for job in jobs :
-            self.loadSubscriptions(self.extractTag(job))
+            self.addUserToSubscription(self.extractTag(job))
             self.scheduleJob(job)
     
     # loads a tag into local subscription record
@@ -305,7 +310,7 @@ class SubscriptionHandler(Thread) :
             if(location.lower() == "internal") :
                 methodName = service['entrypoint']
                 function = self.getFunction(methodName)
-                if(function not None) :
+                if(function is not None) :
                     serviceFunc[serviceName] = function
             else :
 
@@ -336,12 +341,19 @@ class SubscriptionHandler(Thread) :
     def addUserToSubscription(self, tag) :
 
         userId, service = tag.split("_")
-        
+
+        if(self.debug) : logger.debug("service: {} userId: {} userSubscriptions: {}".format(service, userId, self.usersSubscriptions))
+
         if(userId in self.usersSubscriptions) :
-            if( not (service in self.usersSubscriptions[userId]) ) :
-                self.usersSubscriptions[userId].append(service)
+
+            self.usersSubscriptions[userId].append(service)
+            if(self.debug) : logger.debug("Added additional service to {}.".format(userId))
         else :
-            self.usersSubscriptions[userId] = [service]
+            self.usersSubscriptions[userId] = []
+            if(self.debug) : logger.debug("Adding new userId to usersSubscriptions")
+               
+            self.usersSubscriptions[userId].append(service)
+            if(self.debug) : logger.debug("Service: {} userId: {} added to userSubscriptions: {}".format(service, userId, self.usersSubscriptions))
 
     # Removes a user to the local user subscription list
     def removeUserFromSubscription(self, tag) :
@@ -360,6 +372,7 @@ class SubscriptionHandler(Thread) :
         else :
             print("No userId {} exists".format(userId))
 
+    # 
     def getUserIdsForServiceName(self, serviceName) :
         
         result = []
@@ -371,8 +384,11 @@ class SubscriptionHandler(Thread) :
         return result
             
     def getServicesListForUsersId(self, userId) :
+
         if(userId in self.usersSubscriptions) :
             return self.usersSubscriptions[userId]
+        else :
+            return []
 
     def runExternalService(self, args) :
 
@@ -392,10 +408,6 @@ class SubscriptionHandler(Thread) :
             self.serviceManager.makeUnrunnableService(serviceName)
             userIds = self.getUserIdsForServiceName(serviceName)
             self.unscheduledJobByTag(userIds, serviceName)
-
-            #self.removeUserFromSubscription()
-            
-
 
     # Terminates thread loop
     def kill(self) :

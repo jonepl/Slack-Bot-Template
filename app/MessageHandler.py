@@ -111,7 +111,7 @@ class MessageHandler(Thread):
             channel = rawInput[0]['channel']
 
             # Muscle logic 
-            action, response = self.determineAction(str(user), str(self.stripTag(message)), str(channel))
+            action, response = self.determineAction(rawInput[0])
             responseObject = self.generateMessageResponse(user, message, channel, action, response)
 
             return responseObject
@@ -120,8 +120,13 @@ class MessageHandler(Thread):
             return None
 
     # Determine what action to take depending on the message
-    def determineAction(self, userID, message, channel) :
-        
+    def determineAction(self, rawInput) :
+
+        userID = rawInput['user']
+        message = rawInput['text']
+        channel = rawInput['channel']
+        userId = rawInput['user']
+
         if(self.isGreeting(message)) :
             if(self.debug) : logger.debug("Greeting found return random choice")
             return ("writeToSlack", random.choice(GREETING_RESPONSES))
@@ -135,6 +140,20 @@ class MessageHandler(Thread):
             if(self.debug) : logger.debug("Service List Request found {}".format(response))
 
             return ("writeToSlack", response)
+
+        elif(self.isUserServicesListRequest(message)) :
+
+            myServices = self.subscriptionHandler.getServicesListForUsersId(userId)
+            response = None
+            if(len(myServices) == 0) :
+                response = "You are not subscribed to any services."
+            else :
+                response = "You are currently Subscribed to:\n"
+                for index, myService in enumerate(myServices) :
+                    response += "\t{}. {}\n".format(index+1, myService)
+
+            return("writeToSlack", response)
+
 
         elif(self.isServiceRequest(message)) :
             # TODO: Determine if the two methods should be combined into one
@@ -154,9 +173,8 @@ class MessageHandler(Thread):
                     return ("writeToSlack", "Working on processing Service for message: " + self.stripTag(message) + " ...")
                 else :
                     return ("writeToSlack", "Sorry I wasn't able to find a service for message: " + self.stripTag(message) + " ...")
-
             else :
-                return ("writeToSlack", "Sorry {} has exprienced an issue contact administrator.".format(serviceName))
+                return ("writeToSlack", "Unable to retrieve requested service from message {}.".format(message))
         else :
             return ("writeToSlack", "Im not sure how to decipher \"" + self.stripTag(message) + "\".")
 
@@ -242,6 +260,10 @@ class MessageHandler(Thread):
     # #TODO: Improve this
     def isServiceListRequest(self, message) :
         if('list' in message.lower() and 'services' in message.lower()) : return True
+        else : return False
+
+    def isUserServicesListRequest(self, message) :
+        if('my' in message.lower() and 'services' in message.lower()) : return True
         else : return False
 
     # TODO Implement to interact Service Manager
