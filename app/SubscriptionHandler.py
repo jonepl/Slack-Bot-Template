@@ -113,6 +113,8 @@ class SubscriptionHandler(Thread) :
 
                 if(unscheduleSuccessful and dbRemoveSuccessful) :
                     
+                    self.removeUserFromSubscription(tag)
+
                     response = "Successfully unscheduled and removed {} service request of type {} every {} {}.".format(request['scheduleJob']['serviceName'], request['scheduleJob']['type'], str(request['scheduleJob']['interval']), request['scheduleJob']['frequency'] )
                     slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
                                                                request['messageInfo']['channel'], 
@@ -129,10 +131,24 @@ class SubscriptionHandler(Thread) :
                     self.serviceResponseQueue.put(slackResponse)
             
             elif(request['scheduleJob']['action'] == 'update') :
-                pass
-                # self.updateSchedule(request['job'])
-                # self.updateJob(request['job'])
+
+                updateSuccessful = self.updateJob(request)
+
+                if(updateSuccessful) :
+                    response = "Successfully updated {} service request of type {} every {} {}.".format(request['scheduleJob']['serviceName'], request['scheduleJob']['type'], str(request['scheduleJob']['interval']), request['scheduleJob']['frequency'] )
+                    slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
+                                                               request['messageInfo']['channel'], 
+                                                               response)
+                    self.serviceResponseQueue.put(slackResponse)
+                else :   
                 
+                    response = "Unable to update your service for service: {}.".format(serviceName)
+                    slackResponse = self.generateSlackResponse(request['messageInfo']['slackUserId'], 
+                                        request['messageInfo']['channel'], 
+                                        response)
+
+                    self.serviceResponseQueue.put(slackResponse)
+
             else :
                 print("Unknown action for Service request.")
 
@@ -165,8 +181,8 @@ class SubscriptionHandler(Thread) :
 
             query = { "scheduleJob.serviceTag" : tag }
             dbStat = self.collection.remove(query)
-            
-            if(dbStat.nRemoved <= 0) : 
+
+            if(dbStat['n'] <= 0) : 
                 print("ERROR removing document with tag {}.")
                 return False
                 
@@ -176,6 +192,27 @@ class SubscriptionHandler(Thread) :
         else :
             print("Unable to removed tag because it does not exist")
             return False
+
+    # NOTE: request contains new services
+    def updateJob(self, request) :
+        
+        tag = self.produceTag(request)
+
+        query = { "scheduleJob.serviceTag" : tag }
+
+        update = { "$set": { 
+            "scheduleJob.day": request['scheduleJob']['day'],
+            "scheduleJob.interval": request['scheduleJob']['interval'],
+            "scheduleJob.time": request['scheduleJob']['time'],
+            "scheduleJob.frequency": request['scheduleJob']['frequency'],
+            "scheduleJob.type": request['scheduleJob']['type']
+            }
+        }
+
+        result = self.collection.find_one_and_update(query, update)
+
+        if(result is None) : return False
+        else : return True
 
     # Adds a job to Scheduler
     def scheduleJob(self, request) :

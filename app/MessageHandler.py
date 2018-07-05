@@ -141,7 +141,7 @@ class MessageHandler(Thread):
 
             return ("writeToSlack", response)
 
-        elif(self.isUserServicesListRequest(message)) :
+        elif(self.isListAvailableServicesRequest(message)) :
 
             myServices = self.subscriptionHandler.getServicesListForUsersId(userId)
             response = None
@@ -207,6 +207,8 @@ class MessageHandler(Thread):
                     break
 
         #TODO Figure out a way to parse user messages to determine action, scheduleType, frequency, and interval
+        if(result == "update") :
+            return (result, 'intra-day', 'minutes', 1)
         return (result, 'intra-day', 'seconds', 30)
 
     def createServiceRequest(self, scheduleAction, userId, channel, service, scheduleType, frequency, interval, time = None, day = None ) :
@@ -262,9 +264,10 @@ class MessageHandler(Thread):
         if('list' in message.lower() and 'services' in message.lower()) : return True
         else : return False
 
-    def isUserServicesListRequest(self, message) :
+    def isListAvailableServicesRequest(self, message) :
         if('my' in message.lower() and 'services' in message.lower()) : return True
         else : return False
+    
 
     # TODO Implement to interact Service Manager
     def isServiceRequest(self, message) :
