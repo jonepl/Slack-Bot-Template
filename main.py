@@ -1,17 +1,34 @@
-import os
-import config.creds as config
+import os, sys
+
+# Adds App, Config directory to sys path for testing
+path = os.path.abspath(__file__)
+
+app = path[0:path.find("main.py")] + "app"
+config = path[0:path.find("main.py")] + "config"
+sys.path.append(app)
+sys.path.append(config)
+
+import creds as config
+from ServiceManager import ServiceManager
 import argparse
 
 if not os.path.exists("./logs"): os.makedirs("./logs")
 
-from app.SlackBot import SlackBot
-from app.ExampleBot import ExampleBot
+from SlackBot import SlackBot
+from ExampleBot import ExampleBot
 
 def main():
 
-    args = prepCmdArgs();
-    xBot = ExampleBot(config.slack['token'], args.debug)
-    xBot.run()
+    args = prepCmdArgs()
+    try:
+
+        ServiceManager().validateConfig()
+        xBot = ExampleBot(config.slack['token'], args.debug)
+        xBot.run()
+    except Exception as e:
+        print("Exception: " + e)
+        sys.exit(1)
+
 
 def prepCmdArgs() :
     

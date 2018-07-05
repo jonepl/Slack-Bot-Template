@@ -3,13 +3,11 @@ File: SlackBot.py
 Description: Abstraction of a Slackbot implementation. This class should have all general functionality
              for an instance of a Slackbot.
 '''
-from slackclient import SlackClient
-
 import sys
-from abc import ABCMeta, abstractmethod
-import time
-import io
 import logging
+
+from slackclient import SlackClient
+from abc import ABCMeta, abstractmethod
 
 try :
     import Queue
@@ -61,7 +59,11 @@ class SlackBot():
 
     # Attaches a file or a code snippet to slack channel
     def writeToFile(self, channel, filePath) :
-        return self.slack_client.api_call("files.upload", channels=channel, file=open(filePath, 'rb')) 
+        return self.slack_client.api_call("files.upload", channels=channel, file=open(filePath, 'rb'))
+
+    def writeToSharedFile(self, channel, filePath):
+        return self.slack_client.api_call('files.upload', channels=channel, file=open(filePath, 'rb'), filename="Lorem.docx", title="Dat Boi", filetype="space")
+
 
     # Retrieves a detailed list of all members in slack group
     def getMemberList(self):
