@@ -60,7 +60,7 @@ def setup_module(module) :
 
 def test_getAllServices() :
     
-    result = serviceManager.getAllServices()
+    result = serviceManager.getAllServicesDetails()
     assert(result == serviceConfig)
 
 # Bound to config of 
@@ -243,7 +243,7 @@ def test_generateSlackResponse_Happy1() :
     jsonString = '{ "responseType" : "file", "contents" : "test/ServiceManager_test.py" }'
     byteString = jsonString.encode('utf-8')
 
-    result = serviceManager.generateSlackResponse(byteString, messageInfo)
+    result = serviceManager.generateSlackResponseOutput(byteString, messageInfo)
 
     assert(result == expected)
 
@@ -261,7 +261,7 @@ def test_generateSlackResponse_Happy2() :
     jsonString = '{ "responseType" : "text", "contents" : "the cow jumped over the moon" }'
     byteString = jsonString.encode('utf-8')
 
-    result = serviceManager.generateSlackResponse(byteString, messageInfo)
+    result = serviceManager.generateSlackResponseOutput(byteString, messageInfo)
     
     assert(result == expected)
 
@@ -271,7 +271,7 @@ def test_generateSlackResponse_Sad1() :
     jsonString = '{ "response" : "text", "contents" : "the cow jumped over the moon" }'
     byteString = jsonString.encode('utf-8')
 
-    result = serviceManager.generateSlackResponse(byteString, messageInfo)
+    result = serviceManager.generateSlackResponseOutput(byteString, messageInfo)
 
     assert(result == expected)
 
@@ -284,7 +284,7 @@ def test_generateSlackResponse_Sad2() :
     jsonString = '{ "responseType" : "dumbResponseType", "contents" : "the cow jumped over the moon" }'
     byteString = jsonString.encode('utf-8')
 
-    result = serviceManager.generateSlackResponse(byteString, messageInfo)
+    result = serviceManager.generateSlackResponseOutput(byteString, messageInfo)
 
     assert(result == expected)    
     # with pytest.raises(Exception, match="Invalid responseType") as excinfo:

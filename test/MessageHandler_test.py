@@ -78,7 +78,7 @@ def test_determineSchedule_Remove_Happy() :
 def test_determineSchedule_Update_Happy() :
 
     message = "update intro services"
-    expected = ("update", 'intra-day', 'seconds', 30)
+    expected = ("update", 'intra-day', 'minutes', 1)
 
     result = messageHandler.determineSchedule(message)
 
