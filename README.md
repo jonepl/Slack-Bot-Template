@@ -19,9 +19,9 @@
 
 ## Setup:
 
-### 1. Install slack bot
+### 1. Install SlackClient
 ```sh
-$ pip install slackclient
+$ sudo pip install slackclient
 ```
 
 ### 2. Retrive a Slack API token:
@@ -50,6 +50,19 @@ slack = {
 
 A bunch of typically usage slack functions can be inherited from the slackBot.py class. Use test example bot as a guide as needed.
 
+
+### 5. Install other dependencies
+```sh
+$ sudo pip install pymongo
+$ sudo pip install schedule
+$ sudo pip install pytest
+```
+
+## Testing:
+
+```sh
+$ pytest -v
+```
 
 ## Resources
 * Slack Documentation: https://api.slack.com/
